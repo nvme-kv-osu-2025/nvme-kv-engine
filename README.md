@@ -4,4 +4,11 @@ Key-value storage engine leveraging the new NVMe Key-Value Command Set to
 eliminate traditional block-storage translation overhead and demonstrate 2-5x
 performance improvements over conventional storage systems.
 
-**Team Roster:** Cody Strehlow (strehloc@oregonstate.edu), Charles Tang (tangcha@oregonstate.edu), Trinity Paulson (paulsotr@oregonstate.edu), Owen Krause (krauseo@oregonstate.edu)
+**Team Roster:** 
+Cody Strehlow (email: strehloc@oregonstate.edu github: Codystray)
+Charles Tang (email: tangcha@oregonstate.edu github: lilgangus)
+Trinity Paulson (email: paulsotr@oregonstate.edu github: paulsotr)
+Owen Krause (email: krauseo@oregonstate.edu github: owenkrause)
+
+**Project Partner:**
+Payal Godhani (email: godhanipayal@gmail.com)
