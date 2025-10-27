@@ -1,1 +1,11 @@
 build
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+*.so
+*.a
+sample_code_async
+sample_code_sync
+libkvapi.so
+libkvemul.a

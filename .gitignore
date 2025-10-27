@@ -55,3 +55,7 @@ dkms.conf
 *.dwo
 
 .DS_Store
+.vscode/
+
+# build files
+/build

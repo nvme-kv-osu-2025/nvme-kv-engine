@@ -48,7 +48,7 @@
 //#include <regex>
 #include "kv_config.hpp"
 
-#define CFG_PATH  "../env_init.conf"
+#define CFG_PATH  "/kvssd/PDK/core/env_init.conf"
 
 //the key of kv pair that store key spaces name list
 const char* KEY_SPACE_LIST_KEY_NAME = "key_space_list"; 
