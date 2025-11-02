@@ -39,11 +39,11 @@ git fetch --all -p
 
 ### Branch Types & Naming
 
-- **Feature:** `feat/<scope>-<desc>`
-- **Fix:** `fix/<scope>-<desc>`
-- **Chore:** `chore/<desc>`
-- **Docs:** `docs/<desc>`
-- **Refactor:** `refactor/<scope>`
+- **Feature:** `feat/<scope>-<desc>_<ticket_id>`
+- **Fix:** `fix/<scope>-<desc>_<ticket_id>`
+- **Chore:** `chore/<desc>_<ticket_id>`
+- **Docs:** `docs/<desc>_<ticket_id>`
+- **Refactor:** `refactor/<scope>_<ticket_id>`
 
 Create a Branch (from `main`):
 
@@ -52,11 +52,11 @@ Create a Branch (from `main`):
 git fetch origin -p
 git checkout main
 git pull origin main
-git checkout -b feat/<desc>
+git checkout -b feat/<desc>_<ticket_id>
 
 # Work & commit
 git add -p
-git commit -m "feat(<scope>): <message>"
+git commit -m "feat(<scope>)_<ticket_id>: <message>"
 
 # First push: set upstream
 git push -u origin HEAD
@@ -69,7 +69,7 @@ git push -u origin HEAD
 ```bash
 git fetch origin
 git rebase origin/main
-# resolve -> git add <files -> git rebase --continue
+# resolve any merge conflicts -> git add <files -> git rebase --continue
 git push --force-with-lease
 # --force-with-lease instead of --force to avoid overwriting others' work
 ```
@@ -91,10 +91,10 @@ git push --force-with-lease
 
 ## Commit Messages
 
-We follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/):
+We follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) with the ticket ID appended to the type/scope.
 
 ```txt
-<type>[optional scope]: <description>
+<type>[optional scope]_<ticket_id>: <description>
 
 [optional body]
 
@@ -109,14 +109,14 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
 
 Commit message with description and referenced issue in footer
 ```txt
-feat(api): add kv_put_async() with completion callbacks`
+feat(api)_<ticket_id>: add kv_put_async() with completion callbacks
 
 Closes: #123
 ```
 
 Commit message with body + breaking change description in footer.
 ```
-feat(api)!: rename kv_delete() -> kv_del() and change return codes
+feat(api)_<ticket_id>!: rename kv_delete() -> kv_del() and change return codes
 
 Standardizes errno mapping across backends.
 
