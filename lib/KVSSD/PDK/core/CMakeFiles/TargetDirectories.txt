@@ -1,0 +1,7 @@
+/kvssd/PDK/core/CMakeFiles/kvemul_static.dir
+/kvssd/PDK/core/CMakeFiles/kvemul.dir
+/kvssd/PDK/core/CMakeFiles/kvapi.dir
+/kvssd/PDK/core/CMakeFiles/sample_code_async.dir
+/kvssd/PDK/core/CMakeFiles/sample_code_sync.dir
+/kvssd/PDK/core/CMakeFiles/edit_cache.dir
+/kvssd/PDK/core/CMakeFiles/rebuild_cache.dir
