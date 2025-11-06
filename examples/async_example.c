@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
     /* Initialize engine with async support */
     kv_engine_config_t config = {
         .device_path = argv[1],
-        .emul_config_file = "/kvssd/PDK/core/kvssd_emul.conf",
+        .emul_config_file = "../../lib/KVSSD/PDK/core/kvssd_emul.conf",
         .memory_pool_size = 16 * 1024 * 1024,
         .queue_depth = 128,
         .num_worker_threads = 16,  /* More threads for async */
