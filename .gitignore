@@ -1,6 +1,10 @@
 # Prerequisites
 *.d
 
+.clangd
+
+build
+
 # Object files
 *.o
 *.ko
