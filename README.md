@@ -16,29 +16,19 @@ Payal Godhani (email: godhanipayal@gmail.com)
 
 ### Using Docker (Recommended for macOS/Windows)
 
+You can either quickly build and run the examples, or build and stay inside the container to manually run them yourself:
+
+1. Auto build and run examples:
 ```bash
-# Build and start container
-./scripts/build_docker.sh
+./scripts/run_examples.sh
+# automatically exits container after examples complete
+```
 
-# Enter container
-docker exec -it kvssd-container /bin/bash
-
-# Build KVSSD library
-cd /user/lib/KVSSD/PDK/core
-mkdir -p build && cd build
-cmake -DWITH_EMU=ON ..
-make kvapi
-
-# Then build the main project
-cd /user
-mkdir -p build && cd build
-cmake ..
-make
-
-# Run examples
-cd examples
-export KVSSD_EMU_CONFIGFILE=/user/lib/KVSSD/PDK/core/kvssd_emul.conf
-./simple_store /dev/kvemul
-./simple_cache /dev/kvemul
-./async_example /dev/kvemul
+2. Build and manually run examples:
+```bash
+./scripts/build.sh
+# wait for build to finish...
+root@...:/user/build# cd examples
+root@...:/user/build/examples# ./simple_store /dev/kvemul
+root@...:/user/build/examples# ./simple_cache /dev/kvemul
 ```
