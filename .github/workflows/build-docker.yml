@@ -1,0 +1,37 @@
+name: Build Docker Container
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      IMAGE_NAME: kvssd-emulator
+      CONTAINER_NAME: kvssd-container
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and run Docker image
+        run: |
+          ./scripts/build_docker.sh
+
+      - name: Verify Docker image built successfully
+        run: |
+          if ! docker images "$IMAGE_NAME" | grep -q "$IMAGE_NAME"; then
+            echo "ERROR: Docker image $IMAGE_NAME not found!"
+            exit 1
+          fi
+          echo "SUCCESS: Docker image $IMAGE_NAME built"
+          
+      - name: Build initial engine and run test examples
+        run: |
+          docker exec "$CONTAINER_NAME" bash ./scripts/build_with_test.sh
