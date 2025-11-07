@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
     /* Initialize engine */
     kv_engine_config_t config = {
         .device_path = argv[1],
-        .emul_config_file = "/kvssd/PDK/core/kvssd_emul.conf",
+        .emul_config_file = "../../lib/KVSSD/PDK/core/kvssd_emul.conf",
         .memory_pool_size = 16 * 1024 * 1024,  /* 16MB */
         .queue_depth = 64,
         .num_worker_threads = 0,  /* No async threads for now */

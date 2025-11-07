@@ -30,11 +30,7 @@
  *   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-<<<<<<< HEAD
 #include <cstdlib>
-=======
-
->>>>>>> 1cb54b6 (fix)
 #include <stdio.h>
 #include <stdint.h>
 #include <mutex>
