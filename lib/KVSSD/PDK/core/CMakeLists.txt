@@ -120,9 +120,9 @@ elseif(WITH_EMU)
   set_target_properties(kvemul PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ./deps)
 
-  set(KVADI_LIBS -L${CMAKE_ARCHIVE_OUTPUT_DIRECTORY} -Wl,--no-as-needed -lkvemul_static)
+  # set(KVADI_LIBS -L${CMAKE_ARCHIVE_OUTPUT_DIRECTORY} -Wl,--no-as-needed -lkvemul_static)
   #set(KVADI_LIBS -L${CMAKE_CURRENT_SOURCE_DIR}/build/deps -Wl,--no-as-needed -lkvemul_static)
-
+  set(KVADI_LIBS kvemul_static)
   #
   # kv api
   #

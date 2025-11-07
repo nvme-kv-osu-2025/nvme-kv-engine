@@ -1,8 +1,3 @@
-cd /user/lib/KVSSD/PDK/core
-mkdir -p build && cd build
-cmake -DWITH_EMU=ON ..
-make kvapi
-
 # Then build the main project
 cd /user
 mkdir -p build && cd build
