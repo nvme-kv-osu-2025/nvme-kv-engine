@@ -3,7 +3,7 @@
 IMAGE_NAME="kvssd-emulator"
 CONTAINER_NAME="kvssd-container"
 
-PROJECT_DIR="$(dirname "$(dirname "$(dirname "$(realpath "$0")")")")"
+PROJECT_DIR="$(dirname "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")")"
 echo "Project directory is: $PROJECT_DIR"
 
 DOCKERFILE_DIR="$PROJECT_DIR/docker/dev"

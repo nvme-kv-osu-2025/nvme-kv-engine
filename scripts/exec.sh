@@ -4,6 +4,7 @@
 DOCKER=false
 
 if [[ "$1" == "DOCKER" ]]; then
+    shift
     docker exec -i "$CONTAINER_NAME" bash -c "$*"
 else 
     CONTAINER_NAME="kvssd-container"
