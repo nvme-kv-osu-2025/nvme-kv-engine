@@ -3,15 +3,15 @@
 # Check if NOEDIT flag is passed
 NOEDIT=false
 if [[ "$1" == "NOEDIT" ]]; then
-  NOEDIT=true
+    NOEDIT=true
 fi
 
 for dir in src include examples; do
-  if $NOEDIT; then
+    if $NOEDIT; then
     # Just check formatting, don't modify files
-    find "$dir" -type f \( -name "*.cpp" -o -name "*.h" \) -exec clang-format -style="{UseTab: ForIndentation}" --dry-run --Werror {} +
-  else
+        find "$dir" -type f \( -name "*.cpp" -o -name "*.h" \) -exec clang-format --dry-run --Werror {} +
+    else
     # Actually format files
-    find "$dir" -type f \( -name "*.cpp" -o -name "*.h" \) -exec clang-format -i -style="{UseTab: ForIndentation}" {} +
-  fi
+        find "$dir" -type f \( -name "*.cpp" -o -name "*.h" \) -exec clang-format -i {} +
+    fi
 done

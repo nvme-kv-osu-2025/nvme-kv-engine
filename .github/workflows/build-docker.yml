@@ -34,7 +34,7 @@ jobs:
 
       - name: Run clang format on source code
         run: |
-          ./scripts/exec.sh ./scripts/clang_format.sh NOEDIT
+          ./scripts/exec.sh DOCKER ./scripts/clang_format.sh NOEDIT
           
       - name: Build initial engine and run test examples
         run: |
