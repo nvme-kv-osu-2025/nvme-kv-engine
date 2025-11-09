@@ -56,7 +56,7 @@ typedef struct {
   const char
       *emul_config_file;   /**< Path to emulator config (if using emulator) */
   size_t memory_pool_size; /**< Size of memory pool in bytes */
-      uint32_t queue_depth;    /**< I/O queue depth */
+  uint32_t queue_depth;    /**< I/O queue depth */
   uint32_t num_worker_threads; /**< Number of async worker threads */
   uint32_t enable_stats;       /**< Enable performance statistics (0 or 1) */
 } kv_engine_config_t;
