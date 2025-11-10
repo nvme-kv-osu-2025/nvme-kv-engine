@@ -3,7 +3,7 @@
 IMAGE_NAME="kvssd-emulator"
 CONTAINER_NAME="kvssd-container"
 
-PROJECT_DIR="$(dirname "$(dirname "$(realpath "$0")")")"
+PROJECT_DIR="$(dirname "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")")"
 echo "Project directory is: $PROJECT_DIR"
 
 DOCKERFILE_DIR="$PROJECT_DIR/docker/dev"
@@ -22,9 +22,9 @@ fi
 
 # container in detached, mount to project parent directory
 docker run -d \
-  --name "$CONTAINER_NAME" \
-  -v "$PROJECT_DIR:/user" \
-  "$IMAGE_NAME" \
-  tail -f /dev/null
+    --name "$CONTAINER_NAME" \
+    -v "$PROJECT_DIR:/user" \
+    "$IMAGE_NAME" \
+    tail -f /dev/null
 
 echo "Container '$CONTAINER_NAME' is running with image '$IMAGE_NAME'."

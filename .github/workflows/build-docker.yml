@@ -1,4 +1,4 @@
-name: Build Docker Container
+name: Build and Test Docker Container
 
 on:
   push:
@@ -22,7 +22,7 @@ jobs:
 
       - name: Build and run Docker image
         run: |
-          ./scripts/build_docker.sh
+          ./scripts/util/build_docker.sh
 
       - name: Verify Docker image built successfully
         run: |
@@ -31,7 +31,11 @@ jobs:
             exit 1
           fi
           echo "SUCCESS: Docker image $IMAGE_NAME built"
+
+      - name: Run clang format on source code
+        run: |
+          ./scripts/exec.sh DOCKER ./scripts/clang_format.sh NOEDIT
           
       - name: Build initial engine and run test examples
         run: |
-          docker exec "$CONTAINER_NAME" bash ./scripts/build_with_test.sh
+          ./scripts/run_examples.sh
