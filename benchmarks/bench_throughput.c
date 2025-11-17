@@ -5,10 +5,10 @@
  */
 
 #include "kv_engine.h"
+#include "util/bench_utils.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
 #define DEFAULT_NUM_OPS 100000
 #define KEY_SIZE 16
@@ -18,12 +18,6 @@ void print_usage(const char* prog) {
     fprintf(stderr, "Usage: %s <device_path> [num_ops]\n", prog);
     fprintf(stderr, "  device_path: Path to NVMe device (e.g., /dev/kvemul)\n");
     fprintf(stderr, "  num_ops:     Number of operations (default: %d)\n", DEFAULT_NUM_OPS);
-}
-
-double get_time_seconds() {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return ts.tv_sec + ts.tv_nsec / 1000000000.0;
 }
 
 int main(int argc, char** argv) {
@@ -42,22 +36,10 @@ int main(int argc, char** argv) {
     printf("Value size: %d bytes\n\n", VALUE_SIZE);
 
     /* Initialize engine */
-    kv_engine_config_t config = {
-        .device_path = device_path,
-        .emul_config_file = "/kvssd/PDK/core/kvssd_emul.conf",
-        .memory_pool_size = 64 * 1024 * 1024,
-        .queue_depth = 128,
-        .num_worker_threads = 16,
-        .enable_stats = 1
-    };
-
     kv_engine_t* engine;
-    if (kv_engine_init(&engine, &config) != KV_SUCCESS) {
-        fprintf(stderr, "Failed to initialize engine\n");
+    if (init_engine(&engine, device_path) != KV_SUCCESS) {
         return 1;
     }
-
-    printf("Engine initialized.\n\n");
 
     /* Allocate buffers */
     char* key_buffer = malloc(KEY_SIZE);
