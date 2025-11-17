@@ -12,8 +12,8 @@ double get_time_seconds(void) {
     return ts.tv_sec + ts.tv_nsec / 1000000000.0;
 }
 
-kv_result_t init_engine(kv_engine_t** engine, const char* device_path) {
-    kv_engine_config_t config = {
+kv_result_t init_engine(kv_engine_t** engine, const char* device_path, const kv_engine_config_t* config) {
+    kv_engine_config_t default_config = {
         .device_path = device_path,
         .emul_config_file = "/kvssd/PDK/core/kvssd_emul.conf",
         .memory_pool_size = 64 * 1024 * 1024,
@@ -22,7 +22,10 @@ kv_result_t init_engine(kv_engine_t** engine, const char* device_path) {
         .enable_stats = 1
     };
 
-    kv_result_t result = kv_engine_init(engine, &config);
+    // Use provided config or fall back to defaults
+    const kv_engine_config_t* active_config = config ? config : &default_config;
+
+    kv_result_t result = kv_engine_init(engine, active_config);
     if (result != KV_SUCCESS) {
         fprintf(stderr, "Failed to initialize engine\n");
         return result;

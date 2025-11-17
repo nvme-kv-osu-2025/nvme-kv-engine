@@ -37,7 +37,7 @@ int main(int argc, char** argv) {
 
     /* Initialize engine */
     kv_engine_t* engine;
-    if (init_engine(&engine, device_path) != KV_SUCCESS) {
+    if (init_engine(&engine, device_path, NULL) != KV_SUCCESS) {
         return 1;
     }
 
