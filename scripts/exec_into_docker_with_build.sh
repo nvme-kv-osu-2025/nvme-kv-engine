@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 
 # Build (or reuse) the image and ensure the container is running
-. "$SCRIPT_DIR/build_docker.sh"
+. "$SCRIPT_DIR/util/build_docker.sh"
 
 # Run the build steps inside the container, export the env var,
 # then replace the shell with an interactive one that inherits the env.
