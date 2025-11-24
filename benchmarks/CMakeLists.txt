@@ -10,4 +10,8 @@ target_include_directories(bench_utils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(bench_throughput bench_throughput.c)
 target_link_libraries(bench_throughput nvme_kv_engine bench_utils)
 
+add_executable(bench_threading bench_threading.c)
+
+target_link_libraries(bench_threading nvme_kv_engine bench_utils)
+
 # TODO: Add comparison benchmarks with RocksDB, LevelDB, Redis
