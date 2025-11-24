@@ -26,13 +26,26 @@ typedef struct {
 } memory_pool_t;
 
 /**
+ * Thread pool thread structure
+ */
+typedef struct {
+  pthread_t thread;
+  int id;
+  int busy;
+  async_context_t *current_task;
+} thread_pool_thread_t;
+
+/**
  * Thread pool for async operations
  */
 typedef struct {
-  pthread_t *threads;
-  uint32_t num_threads;
+  thread_pool_thread_t *free_threads;
+  thread_pool_thread_t *busy_threads;
+  uint32_t free_threads_count;
+  uint32_t busy_threads_count;
+  uint32_t total_threads;
   int shutdown;
-  // TODO: Add work queue
+  
 } thread_pool_t;
 
 /**
@@ -41,7 +54,6 @@ typedef struct {
 typedef struct {
   kv_engine_t *engine;
   kv_completion_cb callback;
-  void *user_data;
   void *key_buffer;
   size_t key_len;
   void *value_buffer;
