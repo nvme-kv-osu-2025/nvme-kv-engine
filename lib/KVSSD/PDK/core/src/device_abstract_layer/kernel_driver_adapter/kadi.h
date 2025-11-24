@@ -6,6 +6,7 @@
 #define CEPH_KADI_H
 
 #include <pthread.h>
+#include <string>
 #include <map>
 #include <vector>
 #include <mutex>
