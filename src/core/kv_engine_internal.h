@@ -87,7 +87,7 @@ void memory_pool_destroy(memory_pool_t *pool);
 /* Thread pool operations */
 thread_pool_t *thread_pool_create(uint32_t num_threads);
 int thread_pool_submit(thread_pool_t *pool, void *(*func)(void *), void *arg);
-void thread_pool_destroy(thread_pool_t *pool);
+int thread_pool_destroy(thread_pool_t *pool);
 
 /* Statistics helpers */
 void update_stats(kv_engine_t *engine, int is_read, int is_write, int is_delete,
