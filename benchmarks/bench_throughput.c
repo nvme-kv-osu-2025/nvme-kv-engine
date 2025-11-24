@@ -110,7 +110,8 @@ int throughput_testing(kv_engine_t* engine, int num_ops) {
             fflush(stdout);
         }
     }
-
+    printf("  Progress: %d/%d\n", num_ops, num_ops);
+    fflush(stdout);
     print_results(start_time, read_success, read_fail);    
 
     /* Cleanup */
@@ -134,7 +135,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    int testing_sizes[] = {2000, 64000, 128000, 256000, 512000, 1024000};
+    int testing_sizes[] = {500, 1000, 2000, 64000, 128000, 256000};
     int num_tests = sizeof(testing_sizes) / sizeof(testing_sizes[0]);
 
     for (int i = 0; i < num_tests; i++) {
