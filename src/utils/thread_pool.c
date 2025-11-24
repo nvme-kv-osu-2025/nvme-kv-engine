@@ -54,40 +54,22 @@ int thread_pool_submit(thread_pool_t* pool, void* (*func)(void*), void* arg) {
     return 0;
 }
 
-int thread_pool_thread_destroy(thread_pool_thread_t* thread) {
-    if (!thread) {
-        return -1
-    }
-
-    thread->async_context_t = NULL;
-
-    free(thread);
-    return 0;
-}
-
 int thread_pool_destroy(thread_pool_t* pool) {
     if (!pool) {
         return -1;
     }
 
-    // stop the busy threads
-    for (uint32_t i = 0; i < pool->busy_threads_count; i++) {
-        if (thread_pool_thread_destroy(&pool->busy_threads[i]) != 0) {
-            return -1;
-        }
-    }
-
-    for (uint32_t i = 0; i < pool->free_threads_count; i++) {
-        if (thread_pool_thread_destroy(&pool->free_threads[i]) != 0) {
-            return -1;
-        }
-    }
-
-    free(pool->busy_threads);
-    free(pool->free_threads);
-    free(pool);
-
     pool->shutdown = 1;
-    return 0;
 
+    /* Free the arrays (threads are allocated as arrays, not individually) */
+    if (pool->free_threads) {
+        free(pool->free_threads);
+    }
+
+    if (pool->busy_threads) {
+        free(pool->busy_threads);
+    }
+
+    free(pool);
+    return 0;
 }

@@ -26,6 +26,18 @@ typedef struct {
 } memory_pool_t;
 
 /**
+ * Async operation context
+ */
+typedef struct {
+  kv_engine_t *engine;
+  kv_completion_cb callback;
+  void *key_buffer;
+  size_t key_len;
+  void *value_buffer;
+  size_t value_len;
+} async_context_t;
+
+/**
  * Thread pool thread structure
  */
 typedef struct {
@@ -47,18 +59,6 @@ typedef struct {
   int shutdown;
   
 } thread_pool_t;
-
-/**
- * Async operation context
- */
-typedef struct {
-  kv_engine_t *engine;
-  kv_completion_cb callback;
-  void *key_buffer;
-  size_t key_len;
-  void *value_buffer;
-  size_t value_len;
-} async_context_t;
 
 /**
  * Main engine structure (opaque in public API)
