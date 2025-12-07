@@ -10,10 +10,10 @@
 #include <stddef.h>
 
 typedef struct {
-    void *base;                  // Base address of pool
-    size_t size;                 // Total pool size
-    size_t used;                 // Currently allocated bytes
-    pthread_mutex_t lock;        // Thread safety
+  void *base;           // Base address of pool
+  size_t size;          // Total pool size
+  size_t used;          // Currently allocated bytes
+  pthread_mutex_t lock; // Thread safety
 } memory_pool_t;
 
 /**
@@ -21,7 +21,7 @@ typedef struct {
  * @param size Total size of the pool in bytes
  * @return Pointer to the pool, or NULL on failure
  */
-memory_pool_t* memory_pool_create(size_t size);
+memory_pool_t *memory_pool_create(size_t size);
 
 /**
  * Allocate memory from the pool
@@ -29,7 +29,7 @@ memory_pool_t* memory_pool_create(size_t size);
  * @param size Number of bytes to allocate
  * @return Pointer to allocated memory, or NULL if pool is full
  */
-void* memory_pool_alloc(memory_pool_t *pool, size_t size);
+void *memory_pool_alloc(memory_pool_t *pool, size_t size);
 
 /**
  * Free memory (no-op for bump allocator)
