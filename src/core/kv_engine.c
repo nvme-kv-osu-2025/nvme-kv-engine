@@ -173,9 +173,9 @@ kv_result_t kv_engine_store(kv_engine_t* engine,
         return KV_ERR_INVALID_PARAM;
     }
 
-    if (value_len > (2 * 1024 * 1024)) { /* 2MB max */
-        return KV_ERR_VALUE_TOO_LARGE;
-    }
+    // if (value_len > (KV_ENGINE_RETRIEVE_SIZE)) {
+    //     return KV_ERR_VALUE_TOO_LARGE;
+    // }
 
     /* Prepare Samsung KV structures */
     kvs_key kv_key;
@@ -201,8 +201,8 @@ kv_result_t kv_engine_store(kv_engine_t* engine,
 
 kv_result_t kv_engine_retrieve(kv_engine_t* engine,
                                const void* key, size_t key_len,
-                               void** value, size_t* value_len) {
-    if (!engine || !engine->initialized || !key || !value || !value_len) {
+                               void** value, size_t* value_len, bool delete_value) {
+    if (!engine || !engine->initialized || !key || !key_len || !value || !value_len) {
         return KV_ERR_INVALID_PARAM;
     }
 
@@ -215,9 +215,8 @@ kv_result_t kv_engine_retrieve(kv_engine_t* engine,
     kv_key.key = (void*)key;
     kv_key.length = key_len;
 
-    /* Allocate buffer for value (max 2MB) */
-    size_t max_value_size = 2 * 1024 * 1024;
-    void* buffer = malloc(max_value_size);
+    /* intial key retrieve buffer */
+    void* buffer = malloc(KV_ENGINE_RETRIEVE_SIZE);
     if (!buffer) {
         return KV_ERR_NO_MEMORY;
     }
@@ -225,14 +224,28 @@ kv_result_t kv_engine_retrieve(kv_engine_t* engine,
     /* Prepare value structure */
     kvs_value kv_value;
     kv_value.value = buffer;
-    kv_value.length = max_value_size;
+    kv_value.length = KV_ENGINE_RETRIEVE_SIZE;
     kv_value.actual_value_size = 0;
     kv_value.offset = 0;
 
     /* Retrieve the value */
     kvs_option_retrieve option;
-    option.kvs_retrieve_delete = false;  /* Just retrieve, don't delete */
+    option.kvs_retrieve_delete = delete_value;
     kvs_result kvs_res = kvs_retrieve_kvp(engine->keyspace, &kv_key, &option, &kv_value);
+
+    if (kvs_res == KVS_ERR_BUFFER_SMALL) {
+        free(buffer);
+
+        buffer = malloc(kv_value.actual_value_size);
+        if (!buffer) {
+            return KV_ERR_NO_MEMORY;
+        }
+
+        kv_value.value = buffer;
+        kv_value.length = kv_value.actual_value_size;
+        kv_value.offset = 0;
+        kvs_res = kvs_retrieve_kvp(engine->keyspace, &kv_key, &option, &kv_value);
+    }
 
     if (kvs_res != KVS_SUCCESS) {
         free(buffer);
@@ -240,8 +253,8 @@ kv_result_t kv_engine_retrieve(kv_engine_t* engine,
         return map_kvs_result(kvs_res);
     }
 
-    *value = buffer;
-    *value_len = kv_value.actual_value_size;
+    *value = kv_value.value;
+    *value_len = kv_value.length;
 
     update_stats(engine, 1, 0, 0, 1, kv_value.actual_value_size);
     return KV_SUCCESS;
