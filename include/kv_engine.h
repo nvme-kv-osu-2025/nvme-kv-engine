@@ -129,7 +129,7 @@ kv_result_t kv_engine_store(kv_engine_t *engine, const void *key,
  * @return KV_SUCCESS on success, error code otherwise
  */
 kv_result_t kv_engine_retrieve(kv_engine_t *engine, const void *key,
-                               size_t key_len, void **value, size_t *value_len, int delete_value);
+                               size_t key_len, void **value, size_t *value_len, bool delete_value);
 /**
  * Delete a key-value pair (synchronous)
  *

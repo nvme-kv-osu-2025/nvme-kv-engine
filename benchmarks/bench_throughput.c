@@ -97,7 +97,7 @@ int throughput_testing(kv_engine_t* engine, int num_ops) {
         void* retrieved = NULL;
         size_t retrieved_len = 0;
 
-        kv_result_t result = kv_engine_retrieve(engine, key_buffer, KEY_SIZE, &retrieved, &retrieved_len);
+        kv_result_t result = kv_engine_retrieve(engine, key_buffer, KEY_SIZE, &retrieved, &retrieved_len, false);
         if (result == KV_SUCCESS) {
             read_success++;
             free(retrieved);
