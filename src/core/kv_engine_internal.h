@@ -10,7 +10,7 @@
 #include <kvs_api.h>
 #include <pthread.h>
 
-#define KV_ENGINE_RETRIEVE_SIZE  2*1024*1024  /* 2MB */
+#define KV_ENGINE_RETRIEVE_SIZE 2 * 1024 * 1024 /* 2MB */
 
 /* ============================================================================
  * Internal Structures
