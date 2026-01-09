@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
         size_t value_len = 0;
 
         kv_result_t result = kv_engine_retrieve(engine, key, strlen(key),
-                                                &value, &value_len);
+                                                &value, &value_len, false);
         if (result == KV_SUCCESS) {
             hits++;
             free(value);

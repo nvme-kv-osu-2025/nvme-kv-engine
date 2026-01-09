@@ -53,7 +53,7 @@ int main(int argc, char** argv) {
 
     printf("\nRetrieving key='%s'\n", key);
     result = kv_engine_retrieve(engine, key, strlen(key),
-                                &retrieved_value, &retrieved_len);
+                                &retrieved_value, &retrieved_len, false);
     if (result != KV_SUCCESS) {
         fprintf(stderr, "Retrieve failed: %d\n", result);
         goto cleanup;
