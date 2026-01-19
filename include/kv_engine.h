@@ -14,7 +14,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdbool.h>
 
 /* ============================================================================
  * Type Definitions
@@ -39,7 +38,8 @@ typedef enum {
   KV_ERR_VALUE_TOO_LARGE = -6,
   KV_ERR_TIMEOUT = -7,
   KV_ERR_IO = -8,
-  KV_ERR_NOT_INITIALIZED = -9
+  KV_ERR_NOT_INITIALIZED = -9,
+  KV_ERR_KEY_ALREADY_EXISTS = -10
 } kv_result_t;
 
 /**
