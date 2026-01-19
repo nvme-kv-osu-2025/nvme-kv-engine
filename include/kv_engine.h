@@ -126,7 +126,6 @@ kv_result_t kv_engine_store(kv_engine_t *engine, const void *key,
  * @param key_len Key length
  * @param value Pointer to receive value buffer (caller must free)
  * @param value_len Pointer to receive value length
-<<<<<<< HEAD
  * @param delete_value Flag to indicate if the key-value pair should be deleted
  * after retrieval (1 = delete, 0 = keep)
  * @return KV_SUCCESS on success, error code otherwise
@@ -134,13 +133,6 @@ kv_result_t kv_engine_store(kv_engine_t *engine, const void *key,
 kv_result_t kv_engine_retrieve(kv_engine_t *engine, const void *key,
                                size_t key_len, void **value, size_t *value_len,
                                bool delete_value);
-=======
- * @param delete_value Flag to indicate if the key-value pair should be deleted after retrieval (1 = delete, 0 = keep)
- * @return KV_SUCCESS on success, error code otherwise
- */
-kv_result_t kv_engine_retrieve(kv_engine_t *engine, const void *key,
-                               size_t key_len, void **value, size_t *value_len, int delete_value);
->>>>>>> 3e11237 (Fixed kv retrieve size (removed store/retrieve size limitation))
 /**
  * Delete a key-value pair (synchronous)
  *
