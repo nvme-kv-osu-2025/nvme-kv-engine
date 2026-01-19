@@ -10,7 +10,11 @@
 #include <kvs_api.h>
 #include <pthread.h>
 
+<<<<<<< HEAD
 #define KV_ENGINE_RETRIEVE_SIZE 2 * 1024 * 1024 /* 2MB */
+=======
+#define KV_ENGINE_RETRIEVE_SIZE  2*1024*1024  /* 2MB */
+>>>>>>> 3e11237 (Fixed kv retrieve size (removed store/retrieve size limitation))
 
 /* ============================================================================
  * Internal Structures
