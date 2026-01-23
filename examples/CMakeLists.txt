@@ -8,3 +8,7 @@ target_link_libraries(simple_cache nvme_kv_engine)
 
 add_executable(async_example async_example.c)
 target_link_libraries(async_example nvme_kv_engine)
+
+add_executable(hardware_caching_test hardware_cache_testing.c)
+target_link_libraries(hardware_caching_test nvme_kv_engine)
+
