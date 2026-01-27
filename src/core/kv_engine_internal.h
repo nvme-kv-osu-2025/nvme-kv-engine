@@ -6,6 +6,7 @@
 #ifndef KV_ENGINE_INTERNAL_H
 #define KV_ENGINE_INTERNAL_H
 
+#include "../utils/hashTable.h"
 #include "kv_engine.h"
 #include <kvs_api.h>
 #include <pthread.h>
@@ -70,6 +71,9 @@ struct kv_engine {
   /* Statistics */
   kv_engine_stats_t stats;
   pthread_mutex_t stats_lock;
+
+  /* Hash table */
+  struct hash_entry *key_table;
 
   /* State */
   int initialized;

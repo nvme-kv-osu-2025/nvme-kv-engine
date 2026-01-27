@@ -117,6 +117,9 @@ kv_result_t kv_engine_init(kv_engine_t** engine, const kv_engine_config_t* confi
     pthread_mutex_init(&eng->stats_lock, NULL);
     memset(&eng->stats, 0, sizeof(kv_engine_stats_t));
 
+    /* Initialize hash table */
+    eng->key_table = create_table(); // current is just NULL
+
     eng->initialized = 1;
     *engine = eng;
 
@@ -145,6 +148,9 @@ void kv_engine_cleanup(kv_engine_t* engine) {
     if (engine->device) {
         kvs_close_device(engine->device);
     }
+
+    free_table(&engine->key_table);
+
 
     /* Free config strings */
     if (engine->config.device_path) {
@@ -187,6 +193,13 @@ kv_result_t kv_engine_store(kv_engine_t* engine,
     kv_value.length = value_len;
     kv_value.actual_value_size = value_len;
     kv_value.offset = 0;
+
+    // check if the key current exists in the hash table, adding if so
+    if (!key_in_table(&engine->key_table, key, key_len)) {
+        add_key(&engine->key_table, key, key_len);
+    } else {
+        return KV_ERR_KEY_ALREADY_EXISTS;
+    }
 
     /* Perform store operation */
     kvs_option_store option;
@@ -233,6 +246,7 @@ kv_result_t kv_engine_retrieve(kv_engine_t* engine,
     option.kvs_retrieve_delete = delete_value;
     kvs_result kvs_res = kvs_retrieve_kvp(engine->keyspace, &kv_key, &option, &kv_value);
 
+
     if (kvs_res == KVS_ERR_BUFFER_SMALL) {
         free(buffer);
 
@@ -245,6 +259,11 @@ kv_result_t kv_engine_retrieve(kv_engine_t* engine,
         kv_value.length = kv_value.actual_value_size;
         kv_value.offset = 0;
         kvs_res = kvs_retrieve_kvp(engine->keyspace, &kv_key, &option, &kv_value);
+    }
+
+    if (delete_value && kvs_res == KVS_SUCCESS) {
+        /* Remove from hash table */
+        delete_key(&engine->key_table, key, key_len);
     }
 
     if (kvs_res != KVS_SUCCESS) {
@@ -280,10 +299,14 @@ kv_result_t kv_engine_delete(kv_engine_t* engine,
     option.kvs_delete_error = false;  /* Don't error if key doesn't exist */
     kvs_result kvs_res = kvs_delete_kvp(engine->keyspace, &kv_key, &option);
 
+    delete_key(&engine->key_table, key, key_len);
+
     update_stats(engine, 0, 0, 1, kvs_res == KVS_SUCCESS, 0);
     return map_kvs_result(kvs_res);
 }
 
+// Current exists checks both in Samsung KV and in the hash table
+// TODO: discuss if this is the desired behavior, potentially delete hash table check and only check ssd if false
 kv_result_t kv_engine_exists(kv_engine_t* engine,
                              const void* key, size_t key_len,
                              int* exists) {
@@ -294,6 +317,8 @@ kv_result_t kv_engine_exists(kv_engine_t* engine,
     if (key_len < 4 || key_len > 255) {
         return KV_ERR_INVALID_PARAM;
     }
+
+    uint8_t hash_value_check = key_in_table(&engine->key_table, key, key_len);
 
     /* Prepare key */
     kvs_key kv_key;
@@ -314,7 +339,7 @@ kv_result_t kv_engine_exists(kv_engine_t* engine,
         return map_kvs_result(kvs_res);
     }
 
-    *exists = (result_buffer != 0);
+    *exists = (result_buffer != 0) && hash_value_check;
     return KV_SUCCESS;
 }
 
