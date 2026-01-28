@@ -197,9 +197,14 @@ kv_result_t kv_engine_store(kv_engine_t* engine,
     // check if the key current exists in the hash table, adding if so
     if (!key_in_table(&engine->key_table, key, key_len)) {
         add_key(&engine->key_table, key, key_len);
-    } else {
-        return KV_ERR_KEY_ALREADY_EXISTS;
-    }
+    } 
+    // else { 
+    //     // BUG: returning here means we can't overwrite keys, which was
+    //     //      causing issues in the bench_throughput script
+    //
+    //     return KV_ERR_KEY_ALREADY_EXISTS;
+    //  }  
+
 
     /* Perform store operation */
     kvs_option_store option;
