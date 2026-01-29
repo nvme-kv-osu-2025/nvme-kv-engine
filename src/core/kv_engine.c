@@ -189,8 +189,23 @@ kv_result_t kv_engine_store(kv_engine_t* engine,
     kv_key.key = (void*)key;
     kv_key.length = key_len;
 
+    /* handle alignment for DMA */
+    void* value_ptr = (void*)value;
+    void* aligned_buf = NULL;
+    
+    // if user's buffer is not 4096-byte aligned,
+    // allocate temp buffer and copy data
+    if (!IS_DMA_ALIGNED(value)) {
+        aligned_buf = dma_alloc(value_len);
+        if(!aligned_buf) {
+            return KV_ERR_NO_MEMORY;
+        }
+        memcpy(aligned_buf, value, value_len);
+        value_ptr = aligned_buf;
+    }
+
     kvs_value kv_value;
-    kv_value.value = (void*)value;
+    kv_value.value = value_ptr;
     kv_value.length = value_len;
     kv_value.actual_value_size = value_len;
     kv_value.offset = 0;
@@ -206,11 +221,15 @@ kv_result_t kv_engine_store(kv_engine_t* engine,
     //     return KV_ERR_KEY_ALREADY_EXISTS;
     //  }  
 
-
     /* Perform store operation */
     kvs_option_store option;
     option.st_type = KVS_STORE_POST;  /* Overwrite if exists */
     kvs_result kvs_res = kvs_store_kvp(engine->keyspace, &kv_key, &kv_value, &option);
+
+    /* free temporary aligned buffer if one was allocated */
+    if (aligned_buf) {
+        dma_free(aligned_buf);
+    }
 
     /* Update statistics */
     update_stats(engine, 0, 1, 0, kvs_res == KVS_SUCCESS, value_len);
