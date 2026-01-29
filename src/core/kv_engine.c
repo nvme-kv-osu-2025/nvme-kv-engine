@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include "../utils/dma_alloc.h"
 
 /* ============================================================================
  * Helper Functions
@@ -234,7 +235,12 @@ kv_result_t kv_engine_retrieve(kv_engine_t* engine,
     kv_key.length = key_len;
 
     /* intial key retrieve buffer */
-    void* buffer = malloc(KV_ENGINE_RETRIEVE_SIZE);
+    void* buffer = dma_alloc(KV_ENGINE_RETRIEVE_SIZE);
+    // // verify buffers are actually 4096-byte aligned 
+    // printf("DEBUG: buffer address = %p, aligned = %s\n",
+    //        buffer,
+    //        ((uintptr_t)buffer & 0xFFF) == 0 ? "yes" : "no");
+
     if (!buffer) {
         return KV_ERR_NO_MEMORY;
     }
@@ -255,7 +261,7 @@ kv_result_t kv_engine_retrieve(kv_engine_t* engine,
     if (kvs_res == KVS_ERR_BUFFER_SMALL) {
         free(buffer);
 
-        buffer = malloc(kv_value.actual_value_size);
+        buffer = dma_alloc(kv_value.actual_value_size);
         if (!buffer) {
             return KV_ERR_NO_MEMORY;
         }
