@@ -27,12 +27,12 @@
  * @param size Number of bytes to allocate
  * @return Pointer to aligned memory, or NULL on failure
  */
-void* dma_alloc(size_t size);
+void *dma_alloc(size_t size);
 
 /**
  * free DMA-aligned memory
  * @param ptr Pointer from dma_alloc (NULL is safe)
  */
-void dma_free(void* ptr);
+void dma_free(void *ptr);
 
 #endif /* DMA_ALLOC_H */
