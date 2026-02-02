@@ -95,7 +95,7 @@ int main(int argc, char **argv) {
         kvs_key_space_name ks_name;
         ks_name.name_len = strlen("test_ks");
         ks_name.name = "test_ks";
-        kvs_option_key_space ks_opt = { .option = KVS_KEY_ORDER_NONE };
+        kvs_option_key_space ks_opt = { .ordering = KVS_KEY_ORDER_NONE };
         ret = kvs_create_key_space(dev_hd, &ks_name, 0, ks_opt);
         if (ret != KVS_SUCCESS) {
             fprintf(stderr, "    FAIL - kvs_create_key_space returned %d (%s)\n",
