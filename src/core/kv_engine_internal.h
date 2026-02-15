@@ -52,12 +52,21 @@ typedef struct {
 } async_context_t;
 
 /**
+ * Per-device context (device handle + keyspace handle pair)
+ */
+typedef struct {
+  kvs_device_handle device;
+  kvs_key_space_handle keyspace;
+  char *device_path; /* owned copy for cleanup */
+} kv_device_ctx_t;
+
+/**
  * Main engine structure (opaque in public API)
  */
 struct kv_engine {
-  /* Samsung KVSSD handles */
-  kvs_device_handle device;
-  kvs_key_space_handle keyspace;
+  /* Device array — one entry per SSD */
+  kv_device_ctx_t devices[KV_MAX_DEVICES];
+  uint32_t num_devices;
 
   /* Configuration */
   kv_engine_config_t config;

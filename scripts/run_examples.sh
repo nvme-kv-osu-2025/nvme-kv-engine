@@ -1,9 +1,15 @@
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 . "$SCRIPT_DIR"/util/build_docker.sh
 
-# Enter container
-docker exec kvssd-container bash -c "./scripts/util/build.sh && \
+# Enter container: build, set up multi-SSD environment, and run examples
+docker exec kvssd-container bash -c "
+./scripts/util/build.sh && \
+source /user/scripts/setup_emulated_ssds.sh 4 /user && \
 cd /user/build/examples && \
-export KVSSD_EMU_CONFIGFILE=/user/lib/KVSSD/PDK/core/kvssd_emul.conf && \
-./simple_store /dev/kvemul && \
-./simple_cache /dev/kvemul"
+echo '=== Running simple_store on /dev/kvemul0 ===' && \
+./simple_store /dev/kvemul0 && \
+echo '=== Running simple_store on /dev/kvemul1 ===' && \
+./simple_store /dev/kvemul1 && \
+echo '=== Running simple_cache on /dev/kvemul2 ===' && \
+./simple_cache /dev/kvemul2
+"
