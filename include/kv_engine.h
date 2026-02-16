@@ -112,11 +112,13 @@ void kv_engine_cleanup(kv_engine_t *engine);
  * @param key_len Key length (4-255 bytes)
  * @param value Value buffer
  * @param value_len Value length (up to 2MB)
+ * @param overwrite If true, overwrite existing key; if false, return
+ * KV_ERR_KEY_ALREADY_EXISTS
  * @return KV_SUCCESS on success, error code otherwise
  */
 kv_result_t kv_engine_store(kv_engine_t *engine, const void *key,
-                            size_t key_len, const void *value,
-                            size_t value_len);
+                            size_t key_len, const void *value, size_t value_len,
+                            bool overwrite);
 
 /**
  * Retrieve a value by key (synchronous)
@@ -124,7 +126,8 @@ kv_result_t kv_engine_store(kv_engine_t *engine, const void *key,
  * @param engine Engine handle
  * @param key Key buffer
  * @param key_len Key length
- * @param value Pointer to receive value buffer (caller must free)
+ * @param value Pointer to receive value buffer (caller must free with
+ * kv_engine_free_buffer)
  * @param value_len Pointer to receive value length
  * @param delete_value Flag to indicate if the key-value pair should be deleted
  * after retrieval (1 = delete, 0 = keep)
@@ -171,12 +174,14 @@ kv_result_t kv_engine_exists(kv_engine_t *engine, const void *key,
  * @param value_len Value length
  * @param callback Completion callback
  * @param user_data User context for callback
+ * @param overwrite If true, overwrite existing key; if false, return
+ * KV_ERR_KEY_ALREADY_EXISTS
  * @return KV_SUCCESS if submitted, error code otherwise
  */
 kv_result_t kv_engine_store_async(kv_engine_t *engine, const void *key,
                                   size_t key_len, const void *value,
                                   size_t value_len, kv_completion_cb callback,
-                                  void *user_data);
+                                  void *user_data, bool overwrite);
 
 /**
  * Retrieve a value by key (asynchronous)
@@ -226,5 +231,27 @@ kv_result_t kv_engine_get_stats(kv_engine_t *engine, kv_engine_stats_t *stats);
  * @param engine Engine handle
  */
 void kv_engine_reset_stats(kv_engine_t *engine);
+
+/* ============================================================================
+ * Buffer Management
+ * ============================================================================
+ */
+
+/**
+ * Allocate a DMA-aligned buffer for optimal store performance
+ *
+ * @param engine Engine handle
+ * @param size Number of bytes to allocate
+ * @return Pointer to aligned buffer, or NULL on failure
+ */
+void *kv_engine_alloc_buffer(kv_engine_t *engine, size_t size);
+
+/**
+ * Free a buffer allocated with kv_engine_alloc_buffer
+ *
+ * @param engine Engine handle
+ * @param buffer Buffer to free (NULL is safe)
+ */
+void kv_engine_free_buffer(kv_engine_t *engine, void *buffer);
 
 #endif /* KV_ENGINE_H */

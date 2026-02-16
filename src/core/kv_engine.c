@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include "../utils/dma_alloc.h"
 
 /* ============================================================================
  * Helper Functions
@@ -22,6 +23,8 @@ static kv_result_t map_kvs_result(kvs_result kvs_res) {
             return KV_ERR_IO;
         case KVS_ERR_KEY_NOT_EXIST:
             return KV_ERR_KEY_NOT_FOUND;
+        case KVS_ERR_VALUE_UPDATE_NOT_ALLOWED:
+            return KV_ERR_KEY_ALREADY_EXISTS;
         default:
             return KV_ERR_IO;
     }
@@ -170,7 +173,9 @@ void kv_engine_cleanup(kv_engine_t* engine) {
 
 kv_result_t kv_engine_store(kv_engine_t* engine,
                             const void* key, size_t key_len,
-                            const void* value, size_t value_len) {
+                            const void* value, size_t value_len,
+                            bool overwrite) {
+
     if (!engine || !engine->initialized || !key || !value) {
         return KV_ERR_INVALID_PARAM;
     }
@@ -188,23 +193,42 @@ kv_result_t kv_engine_store(kv_engine_t* engine,
     kv_key.key = (void*)key;
     kv_key.length = key_len;
 
+    /* handle alignment for DMA */
+    void* value_ptr = (void*)value;
+    void* aligned_buf = NULL;
+    
+    // if user's buffer is not 4096-byte aligned,
+    // allocate temp buffer and copy data
+    if (!IS_DMA_ALIGNED(value)) {
+        aligned_buf = dma_alloc(value_len);
+        if(!aligned_buf) {
+            return KV_ERR_NO_MEMORY;
+        }
+        memcpy(aligned_buf, value, value_len);
+        value_ptr = aligned_buf;
+    }
+
     kvs_value kv_value;
-    kv_value.value = (void*)value;
+    kv_value.value = value_ptr;
     kv_value.length = value_len;
     kv_value.actual_value_size = value_len;
     kv_value.offset = 0;
 
-    // check if the key current exists in the hash table, adding if so
+    // check if the key current exists in the hash table
     if (!key_in_table(&engine->key_table, key, key_len)) {
         add_key(&engine->key_table, key, key_len);
-    } else {
-        return KV_ERR_KEY_ALREADY_EXISTS;
-    }
+    } 
 
     /* Perform store operation */
     kvs_option_store option;
-    option.st_type = KVS_STORE_POST;  /* Overwrite if exists */
+    /* check if user wants to overwrite if key exists (device will enforce) */ 
+    option.st_type = overwrite ? KVS_STORE_POST : KVS_STORE_NOOVERWRITE;
     kvs_result kvs_res = kvs_store_kvp(engine->keyspace, &kv_key, &kv_value, &option);
+
+    /* free temporary aligned buffer if one was allocated */
+    if (aligned_buf) {
+        dma_free(aligned_buf);
+    }
 
     /* Update statistics */
     update_stats(engine, 0, 1, 0, kvs_res == KVS_SUCCESS, value_len);
@@ -229,7 +253,8 @@ kv_result_t kv_engine_retrieve(kv_engine_t* engine,
     kv_key.length = key_len;
 
     /* intial key retrieve buffer */
-    void* buffer = malloc(KV_ENGINE_RETRIEVE_SIZE);
+    void* buffer = dma_alloc(KV_ENGINE_RETRIEVE_SIZE);
+
     if (!buffer) {
         return KV_ERR_NO_MEMORY;
     }
@@ -248,9 +273,9 @@ kv_result_t kv_engine_retrieve(kv_engine_t* engine,
 
 
     if (kvs_res == KVS_ERR_BUFFER_SMALL) {
-        free(buffer);
+        dma_free(buffer);
 
-        buffer = malloc(kv_value.actual_value_size);
+        buffer = dma_alloc(kv_value.actual_value_size);
         if (!buffer) {
             return KV_ERR_NO_MEMORY;
         }
@@ -267,7 +292,7 @@ kv_result_t kv_engine_retrieve(kv_engine_t* engine,
     }
 
     if (kvs_res != KVS_SUCCESS) {
-        free(buffer);
+        dma_free(buffer);
         update_stats(engine, 1, 0, 0, 0, 0);
         return map_kvs_result(kvs_res);
     }
@@ -390,4 +415,14 @@ void kv_engine_reset_stats(kv_engine_t* engine) {
     pthread_mutex_lock(&engine->stats_lock);
     memset(&engine->stats, 0, sizeof(kv_engine_stats_t));
     pthread_mutex_unlock(&engine->stats_lock);
+}
+
+void *kv_engine_alloc_buffer(kv_engine_t *engine, size_t size) {
+    (void)engine; // make parameter available for buffer pooling
+    return dma_alloc(size);
+}
+
+void kv_engine_free_buffer(kv_engine_t *engine, void *buffer) {
+    (void)engine; // make parameter available for buffer pooling
+    dma_free(buffer);
 }
