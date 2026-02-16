@@ -15,6 +15,7 @@
 #define DMA_ALLOC_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 /* alignment required for nvme DMA buffers (4KB) */
 #define DMA_ALIGNMENT 4096

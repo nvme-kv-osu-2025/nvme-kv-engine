@@ -23,6 +23,8 @@ static kv_result_t map_kvs_result(kvs_result kvs_res) {
             return KV_ERR_IO;
         case KVS_ERR_KEY_NOT_EXIST:
             return KV_ERR_KEY_NOT_FOUND;
+        case KVS_ERR_VALUE_UPDATE_NOT_ALLOWED:
+            return KV_ERR_KEY_ALREADY_EXISTS;
         default:
             return KV_ERR_IO;
     }
@@ -171,7 +173,9 @@ void kv_engine_cleanup(kv_engine_t* engine) {
 
 kv_result_t kv_engine_store(kv_engine_t* engine,
                             const void* key, size_t key_len,
-                            const void* value, size_t value_len) {
+                            const void* value, size_t value_len,
+                            bool overwrite) {
+
     if (!engine || !engine->initialized || !key || !value) {
         return KV_ERR_INVALID_PARAM;
     }
@@ -210,20 +214,15 @@ kv_result_t kv_engine_store(kv_engine_t* engine,
     kv_value.actual_value_size = value_len;
     kv_value.offset = 0;
 
-    // check if the key current exists in the hash table, adding if so
+    // check if the key current exists in the hash table
     if (!key_in_table(&engine->key_table, key, key_len)) {
         add_key(&engine->key_table, key, key_len);
     } 
-    // else { 
-    //     // BUG: returning here means we can't overwrite keys, which was
-    //     //      causing issues in the bench_throughput script
-    //
-    //     return KV_ERR_KEY_ALREADY_EXISTS;
-    //  }  
 
     /* Perform store operation */
     kvs_option_store option;
-    option.st_type = KVS_STORE_POST;  /* Overwrite if exists */
+    /* check if user wants to overwrite if key exists (device will enforce) */ 
+    option.st_type = overwrite ? KVS_STORE_POST : KVS_STORE_NOOVERWRITE;
     kvs_result kvs_res = kvs_store_kvp(engine->keyspace, &kv_key, &kv_value, &option);
 
     /* free temporary aligned buffer if one was allocated */
@@ -255,10 +254,6 @@ kv_result_t kv_engine_retrieve(kv_engine_t* engine,
 
     /* intial key retrieve buffer */
     void* buffer = dma_alloc(KV_ENGINE_RETRIEVE_SIZE);
-    // // verify buffers are actually 4096-byte aligned 
-    // printf("DEBUG: buffer address = %p, aligned = %s\n",
-    //        buffer,
-    //        ((uintptr_t)buffer & 0xFFF) == 0 ? "yes" : "no");
 
     if (!buffer) {
         return KV_ERR_NO_MEMORY;
@@ -278,7 +273,7 @@ kv_result_t kv_engine_retrieve(kv_engine_t* engine,
 
 
     if (kvs_res == KVS_ERR_BUFFER_SMALL) {
-        free(buffer);
+        dma_free(buffer);
 
         buffer = dma_alloc(kv_value.actual_value_size);
         if (!buffer) {
@@ -297,7 +292,7 @@ kv_result_t kv_engine_retrieve(kv_engine_t* engine,
     }
 
     if (kvs_res != KVS_SUCCESS) {
-        free(buffer);
+        dma_free(buffer);
         update_stats(engine, 1, 0, 0, 0, 0);
         return map_kvs_result(kvs_res);
     }
@@ -420,4 +415,14 @@ void kv_engine_reset_stats(kv_engine_t* engine) {
     pthread_mutex_lock(&engine->stats_lock);
     memset(&engine->stats, 0, sizeof(kv_engine_stats_t));
     pthread_mutex_unlock(&engine->stats_lock);
+}
+
+void *kv_engine_alloc_buffer(kv_engine_t *engine, size_t size) {
+    (void)engine; // make parameter available for buffer pooling
+    return dma_alloc(size);
+}
+
+void kv_engine_free_buffer(kv_engine_t *engine, void *buffer) {
+    (void)engine; // make parameter available for buffer pooling
+    dma_free(buffer);
 }

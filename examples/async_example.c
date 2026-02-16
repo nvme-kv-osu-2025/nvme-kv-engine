@@ -77,7 +77,8 @@ int main(int argc, char** argv) {
             key, strlen(key),
             value, strlen(value),
             store_callback,
-            &contexts[i]
+            &contexts[i],
+            false
         );
 
         if (result != KV_SUCCESS) {

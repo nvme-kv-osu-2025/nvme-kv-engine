@@ -67,7 +67,7 @@ int throughput_testing(kv_engine_t* engine, int num_ops) {
         snprintf(key_buffer, KEY_SIZE, "key%012d", i);
 
         kv_result_t result = kv_engine_store(engine, key_buffer, KEY_SIZE,
-                                            value_buffer, VALUE_SIZE);
+                                            value_buffer, VALUE_SIZE, true); /* benchmark needs to overwrite */
         if (result != KV_SUCCESS) {
             write_fail++;
             fprintf(stderr, "Store failed at iteration %d: %d\n", i, result);

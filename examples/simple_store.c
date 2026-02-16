@@ -40,7 +40,7 @@ int main(int argc, char** argv) {
     const char* value = "John Doe - john@example.com";
 
     printf("\nStoring: key='%s', value='%s'\n", key, value);
-    result = kv_engine_store(engine, key, strlen(key), value, strlen(value));
+    result = kv_engine_store(engine, key, strlen(key), value, strlen(value), false); /* disable overwrites */
     if (result != KV_SUCCESS) {
         fprintf(stderr, "Store failed: %d\n", result);
         goto cleanup;

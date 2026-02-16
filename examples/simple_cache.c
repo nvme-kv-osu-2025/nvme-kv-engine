@@ -46,8 +46,9 @@ int main(int argc, char** argv) {
         snprintf(key, sizeof(key), "cache_key_%06d", i);
         snprintf(value, sizeof(value), "cache_value_%06d_data", i);
 
+        // overwrite = true, cache overwrites
         kv_result_t result = kv_engine_store(engine, key, strlen(key),
-                                            value, strlen(value));
+                                            value, strlen(value), true);
         if (result != KV_SUCCESS) {
             fprintf(stderr, "Store failed at iteration %d: %d\n", i, result);
             break;
