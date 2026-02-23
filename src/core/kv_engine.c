@@ -114,7 +114,20 @@ kv_result_t kv_engine_init(kv_engine_t** engine, const kv_engine_config_t* confi
     memset(&eng->stats, 0, sizeof(kv_engine_stats_t));
 
     /* Initialize hash table */
-    eng->key_table = create_table();
+    if (create_table(&eng->key_table) != 0) {
+        if (eng->workers) {
+            thread_pool_destroy(eng->workers);
+        }
+        memory_pool_destroy(eng->mem_pool);
+        for (uint32_t i = 0; i < eng->num_devices; i++) {
+            kv_engine_close_device(&eng->devices[i]);
+        }
+        free((void*)eng->config.device_path);
+        free((void*)eng->config.emul_config_file);
+        pthread_mutex_destroy(&eng->stats_lock);
+        free(eng);
+        return KV_ERR_NO_MEMORY;
+    }
 
     eng->initialized = 1;
     *engine = eng;
@@ -202,10 +215,8 @@ kv_result_t kv_engine_store(kv_engine_t* engine,
     kv_value.actual_value_size = value_len;
     kv_value.offset = 0;
 
-    // check if the key current exists in the hash table
-    if (!key_in_table(&engine->key_table, key, key_len)) {
-        add_key(&engine->key_table, key, key_len);
-    } 
+    // add key to in-memory index if missing
+    add_key(&engine->key_table, key, key_len);
 
     /* Perform store operation */
     kvs_option_store option;

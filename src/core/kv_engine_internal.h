@@ -82,7 +82,7 @@ struct kv_engine {
   pthread_mutex_t stats_lock;
 
   /* Hash table */
-  struct hash_entry *key_table;
+  hash_table_t key_table;
 
   /* State */
   int initialized;
