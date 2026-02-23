@@ -108,4 +108,14 @@ void thread_pool_destroy(thread_pool_t *pool);
 void update_stats(kv_engine_t *engine, int is_read, int is_write, int is_delete,
                   int success, size_t bytes);
 
+/* Multi-device helpers */
+kv_result_t kv_engine_resolve_device_paths(const kv_engine_config_t *config,
+                                           const char **effective_paths,
+                                           uint32_t *effective_count);
+uint32_t kv_engine_shard_for_key(const void *key, size_t key_len,
+                                 uint32_t num_devices);
+kv_result_t kv_engine_open_device(kv_device_ctx_t *ctx, const char *path,
+                                  uint32_t dev_index);
+void kv_engine_close_device(kv_device_ctx_t *ctx);
+
 #endif /* KV_ENGINE_INTERNAL_H */

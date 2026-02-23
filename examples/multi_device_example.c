@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 
 #define NUM_KEYS 12
 
@@ -59,7 +60,7 @@ int main(int argc, char **argv) {
         snprintf(key, sizeof(key), "user:%06d", i);
         snprintf(value, sizeof(value), "data-for-user-%d", i);
 
-        res = kv_engine_store(engine, key, strlen(key), value, strlen(value) + 1);
+        res = kv_engine_store(engine, key, strlen(key), value, strlen(value) + 1, false);
         if (res != KV_SUCCESS) {
             fprintf(stderr, "  STORE FAILED for key '%s': %d\n", key, res);
         } else {
@@ -94,7 +95,7 @@ int main(int argc, char **argv) {
     /* Print stats */
     kv_engine_stats_t stats;
     kv_engine_get_stats(engine, &stats);
-    printf("  Total ops: %lu  (writes: %lu, reads: %lu)\n",
+    printf("  Total ops: %" PRIu64 "  (writes: %" PRIu64 ", reads: %" PRIu64 ")\n",
            stats.total_ops, stats.write_ops, stats.read_ops);
 
     kv_engine_cleanup(engine);

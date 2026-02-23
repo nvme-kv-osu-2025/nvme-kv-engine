@@ -30,82 +30,6 @@ static kv_result_t map_kvs_result(kvs_result kvs_res) {
     }
 }
 
-/**
- * FNV-1a hash for key-to-device sharding.
- * Returns device index in [0, num_devices).
- */
-static uint32_t shard_for_key(const void *key, size_t key_len, uint32_t num_devices) {
-    const uint8_t *data = (const uint8_t *)key;
-    uint32_t hash = 2166136261u;  /* FNV offset basis */
-    for (size_t i = 0; i < key_len; i++) {
-        hash ^= data[i];
-        hash *= 16777619u;        /* FNV prime */
-    }
-    return hash % num_devices;
-}
-
-/**
- * Open a single device and its keyspace.
- * Writes into ctx on success. Returns KV_SUCCESS or error.
- */
-static kv_result_t open_device(kv_device_ctx_t *ctx, const char *path, uint32_t dev_index) {
-    kvs_result kvs_res = kvs_open_device((char *)path, &ctx->device);
-    if (kvs_res != KVS_SUCCESS) {
-        fprintf(stderr, "Failed to open device %s: 0x%x\n", path, kvs_res);
-        return KV_ERR_DEVICE_OPEN;
-    }
-
-    /* Build a unique keyspace name per device */
-    char ks_name_buf[64];
-    snprintf(ks_name_buf, sizeof(ks_name_buf), "nvme_kv_engine_%u", dev_index);
-
-    kvs_res = kvs_open_key_space(ctx->device, ks_name_buf, &ctx->keyspace);
-    if (kvs_res != KVS_SUCCESS) {
-        /* Try to create keyspace */
-        kvs_key_space_name ks_name;
-        ks_name.name = ks_name_buf;
-        ks_name.name_len = strlen(ks_name_buf);
-
-        kvs_option_key_space option = { KVS_KEY_ORDER_NONE };
-        kvs_res = kvs_create_key_space(ctx->device, &ks_name, 0, option);
-        if (kvs_res != KVS_SUCCESS) {
-            fprintf(stderr, "Failed to create keyspace on %s: 0x%x\n", path, kvs_res);
-            kvs_close_device(ctx->device);
-            ctx->device = NULL;
-            return KV_ERR_DEVICE_OPEN;
-        }
-
-        kvs_res = kvs_open_key_space(ctx->device, ks_name_buf, &ctx->keyspace);
-        if (kvs_res != KVS_SUCCESS) {
-            fprintf(stderr, "Failed to open keyspace on %s: 0x%x\n", path, kvs_res);
-            kvs_close_device(ctx->device);
-            ctx->device = NULL;
-            return KV_ERR_DEVICE_OPEN;
-        }
-    }
-
-    ctx->device_path = strdup(path);
-    return KV_SUCCESS;
-}
-
-/**
- * Close a single device context and free its resources.
- */
-static void close_device(kv_device_ctx_t *ctx) {
-    if (ctx->keyspace) {
-        kvs_close_key_space(ctx->keyspace);
-        ctx->keyspace = NULL;
-    }
-    if (ctx->device) {
-        kvs_close_device(ctx->device);
-        ctx->device = NULL;
-    }
-    if (ctx->device_path) {
-        free(ctx->device_path);
-        ctx->device_path = NULL;
-    }
-}
-
 /* ============================================================================
  * Lifecycle Management
  * ============================================================================ */
@@ -117,26 +41,10 @@ kv_result_t kv_engine_init(kv_engine_t** engine, const kv_engine_config_t* confi
 
     /* Determine effective device list */
     const char *effective_paths[KV_MAX_DEVICES];
-    uint32_t effective_count;
-
-    if (config->num_devices > 0) {
-        if (config->num_devices > KV_MAX_DEVICES) {
-            return KV_ERR_INVALID_PARAM;
-        }
-        for (uint32_t i = 0; i < config->num_devices; i++) {
-            if (!config->device_paths[i]) {
-                return KV_ERR_INVALID_PARAM;
-            }
-            effective_paths[i] = config->device_paths[i];
-        }
-        effective_count = config->num_devices;
-    } else {
-        /* Legacy single-device mode */
-        if (!config->device_path) {
-            return KV_ERR_INVALID_PARAM;
-        }
-        effective_paths[0] = config->device_path;
-        effective_count = 1;
+    uint32_t effective_count = 0;
+    kv_result_t res = kv_engine_resolve_device_paths(config, effective_paths, &effective_count);
+    if (res != KV_SUCCESS) {
+        return res;
     }
 
     /* Allocate engine structure */
@@ -157,11 +65,11 @@ kv_result_t kv_engine_init(kv_engine_t** engine, const kv_engine_config_t* confi
     /* Open all devices */
     eng->num_devices = 0;
     for (uint32_t i = 0; i < effective_count; i++) {
-        kv_result_t res = open_device(&eng->devices[i], effective_paths[i], i);
+        kv_result_t res = kv_engine_open_device(&eng->devices[i], effective_paths[i], i);
         if (res != KV_SUCCESS) {
             /* Rollback: close all previously opened devices */
             for (uint32_t j = 0; j < i; j++) {
-                close_device(&eng->devices[j]);
+                kv_engine_close_device(&eng->devices[j]);
             }
             free((void*)eng->config.device_path);
             free((void*)eng->config.emul_config_file);
@@ -177,7 +85,7 @@ kv_result_t kv_engine_init(kv_engine_t** engine, const kv_engine_config_t* confi
     eng->mem_pool = memory_pool_create(pool_size);
     if (!eng->mem_pool) {
         for (uint32_t i = 0; i < eng->num_devices; i++) {
-            close_device(&eng->devices[i]);
+            kv_engine_close_device(&eng->devices[i]);
         }
         free((void*)eng->config.device_path);
         free((void*)eng->config.emul_config_file);
@@ -192,7 +100,7 @@ kv_result_t kv_engine_init(kv_engine_t** engine, const kv_engine_config_t* confi
         if (!eng->workers) {
             memory_pool_destroy(eng->mem_pool);
             for (uint32_t i = 0; i < eng->num_devices; i++) {
-                close_device(&eng->devices[i]);
+                kv_engine_close_device(&eng->devices[i]);
             }
             free((void*)eng->config.device_path);
             free((void*)eng->config.emul_config_file);
@@ -232,7 +140,7 @@ void kv_engine_cleanup(kv_engine_t* engine) {
 
     /* Close all devices */
     for (uint32_t i = 0; i < engine->num_devices; i++) {
-        close_device(&engine->devices[i]);
+        kv_engine_close_device(&engine->devices[i]);
     }
 
     free_table(&engine->key_table);
@@ -266,7 +174,7 @@ kv_result_t kv_engine_store(kv_engine_t* engine,
         return KV_ERR_INVALID_PARAM;
     }
 
-    uint32_t dev_idx = shard_for_key(key, key_len, engine->num_devices);
+    uint32_t dev_idx = kv_engine_shard_for_key(key, key_len, engine->num_devices);
 
     /* Prepare Samsung KV structures */
     kvs_key kv_key;
@@ -303,7 +211,7 @@ kv_result_t kv_engine_store(kv_engine_t* engine,
     kvs_option_store option;
     /* check if user wants to overwrite if key exists (device will enforce) */ 
     option.st_type = overwrite ? KVS_STORE_POST : KVS_STORE_NOOVERWRITE;
-    kvs_result kvs_res = kvs_store_kvp(engine->keyspace, &kv_key, &kv_value, &option);
+    kvs_result kvs_res = kvs_store_kvp(engine->devices[dev_idx].keyspace, &kv_key, &kv_value, &option);
 
     /* free temporary aligned buffer if one was allocated */
     if (aligned_buf) {
@@ -327,7 +235,7 @@ kv_result_t kv_engine_retrieve(kv_engine_t* engine,
         return KV_ERR_INVALID_PARAM;
     }
 
-    uint32_t dev_idx = shard_for_key(key, key_len, engine->num_devices);
+    uint32_t dev_idx = kv_engine_shard_for_key(key, key_len, engine->num_devices);
 
     /* Prepare key */
     kvs_key kv_key;
@@ -396,7 +304,7 @@ kv_result_t kv_engine_delete(kv_engine_t* engine,
         return KV_ERR_INVALID_PARAM;
     }
 
-    uint32_t dev_idx = shard_for_key(key, key_len, engine->num_devices);
+    uint32_t dev_idx = kv_engine_shard_for_key(key, key_len, engine->num_devices);
 
     /* Prepare key */
     kvs_key kv_key;
@@ -427,7 +335,7 @@ kv_result_t kv_engine_exists(kv_engine_t* engine,
         return KV_ERR_INVALID_PARAM;
     }
 
-    uint32_t dev_idx = shard_for_key(key, key_len, engine->num_devices);
+    uint32_t dev_idx = kv_engine_shard_for_key(key, key_len, engine->num_devices);
 
     uint8_t hash_value_check = key_in_table(&engine->key_table, key, key_len);
 
