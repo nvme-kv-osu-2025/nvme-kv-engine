@@ -16,6 +16,13 @@
 #include <stdint.h>
 
 /* ============================================================================
+ * Constants
+ * ============================================================================
+ */
+
+#define KV_MAX_DEVICES 8 /**< Maximum number of devices per engine instance */
+
+/* ============================================================================
  * Type Definitions
  * ============================================================================
  */
@@ -54,13 +61,18 @@ typedef void (*kv_completion_cb)(kv_result_t result, void *user_data);
  * Configuration options for engine initialization
  */
 typedef struct {
-  const char *device_path; /**< Path to NVMe device (e.g., /dev/nvme0n1) */
+  const char *device_path; /**< Path to NVMe device (single-device mode) */
   const char
       *emul_config_file;   /**< Path to emulator config (if using emulator) */
   size_t memory_pool_size; /**< Size of memory pool in bytes */
   uint32_t queue_depth;    /**< I/O queue depth */
   uint32_t num_worker_threads; /**< Number of async worker threads */
   uint32_t enable_stats;       /**< Enable performance statistics (0 or 1) */
+
+  /* Multi-device support: set num_devices > 0 to use multiple SSDs.
+   * When num_devices == 0, the engine falls back to device_path above. */
+  const char *device_paths[KV_MAX_DEVICES]; /**< Array of device paths */
+  uint32_t num_devices; /**< Number of devices (0 = single-device mode) */
 } kv_engine_config_t;
 
 /**

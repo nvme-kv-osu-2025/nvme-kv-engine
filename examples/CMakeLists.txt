@@ -8,3 +8,6 @@ target_link_libraries(simple_cache nvme_kv_engine)
 
 add_executable(async_example async_example.c)
 target_link_libraries(async_example nvme_kv_engine)
+
+add_executable(multi_device_example multi_device_example.c)
+target_link_libraries(multi_device_example nvme_kv_engine)

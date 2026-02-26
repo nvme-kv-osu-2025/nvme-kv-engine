@@ -20,12 +20,14 @@ docker exec -it kvssd-container bash -lc '
   cmake ..
   make
 
-  export KVSSD_EMU_CONFIGFILE=/user/lib/KVSSD/PDK/core/kvssd_emul.conf
+  # Set up multiple emulated NVMe KV SSDs (default: 4)
+  source /user/scripts/setup_emulated_ssds.sh 4 /user
   echo
   echo "[kvssd] Build complete."
-  echo "[kvssd] KVSSD_EMU_CONFIGFILE is set to: $KVSSD_EMU_CONFIGFILE"
+  echo "[kvssd] $KVSSD_NUM_SSDS emulated SSDs configured."
   echo "[kvssd] Dropping you into an interactive shell."
-  echo "[kvssd] cd into examples/ and run ./simple_store /dev/kvemul or ./simple_cache /dev/kvemul to test."
+  echo "[kvssd] Device paths: /dev/kvemul0 .. /dev/kvemul$((KVSSD_NUM_SSDS - 1))"
+  echo "[kvssd] Example: cd build/examples && ./simple_store /dev/kvemul0"
   echo
 
   # Replace the current shell with an interactive login shell so the exported
