@@ -132,7 +132,6 @@ kv_result_t kv_engine_init(kv_engine_t** engine, const kv_engine_config_t* confi
     eng->initialized = 1;
     *engine = eng;
 
-    printf("Engine initialized with %u device(s)\n", eng->num_devices);
     return KV_SUCCESS;
 }
 

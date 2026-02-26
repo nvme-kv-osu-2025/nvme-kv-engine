@@ -22,7 +22,7 @@
 #   kv_engine_init(&engine0, &(kv_engine_config_t){ .device_path = "/dev/kvemul0", ... });
 #   kv_engine_init(&engine1, &(kv_engine_config_t){ .device_path = "/dev/kvemul1", ... });
 
-set -euo pipefail
+set -uo pipefail
 
 NUM_SSDS="${1:-4}"
 BASE_DIR="${2:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
