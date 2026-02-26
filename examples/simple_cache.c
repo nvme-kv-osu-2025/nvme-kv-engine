@@ -80,7 +80,7 @@ int main(int argc, char **argv) {
         kv_engine_retrieve(engine, key, strlen(key), &value, &value_len, false);
     if (result == KV_SUCCESS) {
       hits++;
-      free(value);
+      kv_engine_free_buffer(engine, value);
     }
 
     if ((i + 1) % 100 == 0) {
