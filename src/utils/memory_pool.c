@@ -8,7 +8,7 @@
 #include <stdlib.h>
 
 #define ALIGNMENT 8
-#define ALIGN_UP(n, align) (((n) + (align)-1) & ~((align)-1))
+#define ALIGN_UP(n, align) (((n) + (align) - 1) & ~((align) - 1))
 
 memory_pool_t *memory_pool_create(size_t size) {
   memory_pool_t *pool = (memory_pool_t *)malloc(sizeof(memory_pool_t));
