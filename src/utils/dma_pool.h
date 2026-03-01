@@ -20,8 +20,8 @@
  */
 typedef struct {
   void **free_list;
-  void **all_buffers;  // all allocated buffers (for ownership checks)
-  int top;             // idx of next available buffer (-1 if empty)
+  void **all_buffers; // all allocated buffers (for ownership checks)
+  int top;            // idx of next available buffer (-1 if empty)
   size_t buffer_size;
   size_t count;
   pthread_mutex_t lock;

@@ -76,7 +76,7 @@ typedef struct {
 
   /* DMA buffer pool: set dma_pool_count > 0 to enable pooling.
    * Each buffer is KV_ENGINE_RETRIEVE_SIZE (2MB). 0 = disabled. */
-  uint32_t dma_pool_count; /**< Number of DMA buffers to pre-allocate (0 = disabled) */
+  uint32_t dma_pool_count;
 } kv_engine_config_t;
 
 /**
