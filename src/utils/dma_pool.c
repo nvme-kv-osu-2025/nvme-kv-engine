@@ -18,11 +18,18 @@ dma_pool_t *dma_pool_create(size_t buffer_size, size_t count) {
     return NULL;
   }
 
+  pool->all_buffers = malloc(sizeof(void *) * count);
+  if (!pool->all_buffers) {
+    free(pool->free_list);
+    free(pool);
+    return NULL;
+  }
+
   pool->buffer_size = buffer_size;
   pool->count = count;
   pool->top = -1;
 
-  // pre-allocate all buffers and push onto the free-list
+  // pre-allocate all buffers and push onto both free-list and all_buffers
   for (size_t i = 0; i < count; i++) {
     void *buf = dma_alloc(buffer_size);
     if (!buf) {
@@ -31,6 +38,7 @@ dma_pool_t *dma_pool_create(size_t buffer_size, size_t count) {
     }
     pool->top++;
     pool->free_list[pool->top] = buf;
+    pool->all_buffers[i] = buf;
   }
 
   pthread_mutex_init(&pool->lock, NULL);
@@ -70,15 +78,32 @@ void dma_pool_release(dma_pool_t *pool, void *buffer) {
   pthread_mutex_unlock(&pool->lock);
 }
 
+int dma_pool_owns(dma_pool_t *pool, void *buffer) {
+  if (!pool || !buffer) {
+    return 0;
+  }
+  for (size_t i = 0; i < pool->count; i++) {
+    if (pool->all_buffers[i] == buffer) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
 void dma_pool_destroy(dma_pool_t *pool) {
   if (!pool) {
     return;
   }
 
-  if (pool->free_list) {
-    for (int i = 0; i <= pool->top; i++) {
-      dma_free(pool->free_list[i]);
+  /* free all buffers via all_buffers (free_list only tracks available ones) */
+  if (pool->all_buffers) {
+    for (size_t i = 0; i < pool->count; i++) {
+      dma_free(pool->all_buffers[i]);
     }
+    free(pool->all_buffers);
+  }
+
+  if (pool->free_list) {
     free(pool->free_list);
   }
 

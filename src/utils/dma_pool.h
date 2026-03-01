@@ -20,7 +20,8 @@
  */
 typedef struct {
   void **free_list;
-  int top;              // idx of next available buffer (-1 if empty) 
+  void **all_buffers;  // all allocated buffers (for ownership checks)
+  int top;             // idx of next available buffer (-1 if empty)
   size_t buffer_size;
   size_t count;
   pthread_mutex_t lock;
@@ -53,6 +54,16 @@ void *dma_pool_acquire(dma_pool_t *pool);
  * @param buffer Buffer to return
  */
 void dma_pool_release(dma_pool_t *pool, void *buffer);
+
+/**
+ * Check if a buffer was allocated from this pool.
+ * Used to route kv_engine_free_buffer correctly.
+ *
+ * @param pool   The buffer pool
+ * @param buffer Buffer to check
+ * @return 1 if buffer belongs to pool, 0 otherwise
+ */
+int dma_pool_owns(dma_pool_t *pool, void *buffer);
 
 /**
  * Destroy the pool and free all buffers.

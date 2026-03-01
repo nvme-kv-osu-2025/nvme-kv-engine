@@ -73,6 +73,10 @@ typedef struct {
    * When num_devices == 0, the engine falls back to device_path above. */
   const char *device_paths[KV_MAX_DEVICES]; /**< Array of device paths */
   uint32_t num_devices; /**< Number of devices (0 = single-device mode) */
+
+  /* DMA buffer pool: set dma_pool_count > 0 to enable pooling.
+   * Each buffer is KV_ENGINE_RETRIEVE_SIZE (2MB). 0 = disabled. */
+  uint32_t dma_pool_count; /**< Number of DMA buffers to pre-allocate (0 = disabled) */
 } kv_engine_config_t;
 
 /**

@@ -12,6 +12,7 @@ set(LIBRARY_SOURCES
     src/utils/memory_pool.c
     src/utils/thread_pool.c
     src/utils/dma_alloc.c
+    src/utils/dma_pool.c
     src/async/async_ops.c
 )
 
