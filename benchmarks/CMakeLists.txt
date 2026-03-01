@@ -13,4 +13,8 @@ target_link_libraries(bench_throughput nvme_kv_engine bench_utils)
 add_executable(test_memory_pool test_memory_pool.c)
 target_link_libraries(test_memory_pool nvme_kv_engine bench_utils)
 
+add_executable(bench_dma_pool bench_dma_pool.c)
+target_link_libraries(bench_dma_pool nvme_kv_engine bench_utils)
+target_include_directories(bench_dma_pool PRIVATE ${CMAKE_SOURCE_DIR}/src/utils)
+
 # TODO: Add comparison benchmarks with RocksDB, LevelDB, Redis
