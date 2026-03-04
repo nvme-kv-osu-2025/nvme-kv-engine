@@ -35,7 +35,8 @@ kv_result_t init_engine(kv_engine_t** engine, const char* device_path, const kv_
         .memory_pool_size = 64 * 1024 * 1024,
         .queue_depth = 128,
         .num_worker_threads = 16,
-        .enable_stats = 1
+        .enable_stats = 1,
+        .dma_pool_count = 16
     };
 
     // Use provided config or fall back to defaults
