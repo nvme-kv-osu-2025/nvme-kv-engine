@@ -52,10 +52,11 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  printf("\n--- Storing %d keys across %d devices ---\n\n", NUM_KEYS,
-         num_devices);
+  int failure_count = 0;
+  printf("\n--- Multi-SSD smoke test (%d keys across %d devices) ---\n\n",
+         NUM_KEYS, num_devices);
 
-  /* Store keys — they will be sharded across devices automatically */
+  /* Store deterministic key/value pairs */
   for (int i = 0; i < NUM_KEYS; i++) {
     char key[32];
     char value[64];
@@ -66,19 +67,21 @@ int main(int argc, char **argv) {
                           false);
     if (res != KV_SUCCESS) {
       fprintf(stderr, "  STORE FAILED for key '%s': %d\n", key, res);
+      failure_count++;
     } else {
       printf("  Stored key '%s'\n", key);
     }
   }
 
-  printf("\n--- Retrieving all keys ---\n\n");
+  printf("\n--- Retrieving and validating all keys ---\n\n");
 
-  /* Retrieve all keys back — sharding is deterministic so each key
-     goes to the same device it was stored on */
+  /* Retrieve and validate values */
   int success_count = 0;
   for (int i = 0; i < NUM_KEYS; i++) {
     char key[32];
+    char expected_value[64];
     snprintf(key, sizeof(key), "user:%06d", i);
+    snprintf(expected_value, sizeof(expected_value), "data-for-user-%d", i);
 
     void *value = NULL;
     size_t value_len = 0;
@@ -86,15 +89,57 @@ int main(int argc, char **argv) {
         kv_engine_retrieve(engine, key, strlen(key), &value, &value_len, false);
     if (res != KV_SUCCESS) {
       fprintf(stderr, "  RETRIEVE FAILED for key '%s': %d\n", key, res);
+      failure_count++;
     } else {
-      printf("  Retrieved key '%s' -> '%s'\n", key, (char *)value);
+      if (strcmp((char *)value, expected_value) != 0) {
+        fprintf(stderr, "  VALUE MISMATCH for key '%s': expected '%s', got '%s'\n",
+                key, expected_value, (char *)value);
+        failure_count++;
+      } else {
+        printf("  Retrieved key '%s' -> '%s'\n", key, (char *)value);
+      }
       kv_engine_free_buffer(engine, value);
       success_count++;
     }
   }
 
+  printf("\n--- Verifying key existence ---\n\n");
+  for (int i = 0; i < NUM_KEYS; i++) {
+    char key[32];
+    int exists = 0;
+    snprintf(key, sizeof(key), "user:%06d", i);
+    res = kv_engine_exists(engine, key, strlen(key), &exists);
+    if (res != KV_SUCCESS || !exists) {
+      fprintf(stderr, "  EXISTS FAILED for key '%s': res=%d exists=%d\n", key,
+              res, exists);
+      failure_count++;
+    }
+  }
+
+  printf("\n--- Deleting a subset and re-checking existence ---\n\n");
+  for (int i = 0; i < NUM_KEYS; i += 3) {
+    char key[32];
+    int exists = 0;
+    snprintf(key, sizeof(key), "user:%06d", i);
+
+    res = kv_engine_delete(engine, key, strlen(key));
+    if (res != KV_SUCCESS) {
+      fprintf(stderr, "  DELETE FAILED for key '%s': %d\n", key, res);
+      failure_count++;
+      continue;
+    }
+
+    res = kv_engine_exists(engine, key, strlen(key), &exists);
+    if (res != KV_SUCCESS || exists) {
+      fprintf(stderr, "  POST-DELETE EXISTS FAILED for key '%s': res=%d exists=%d\n",
+              key, res, exists);
+      failure_count++;
+    }
+  }
+
   printf("\n--- Results ---\n");
   printf("  %d / %d keys retrieved successfully\n", success_count, NUM_KEYS);
+  printf("  Failures observed: %d\n", failure_count);
 
   /* Print stats */
   kv_engine_stats_t stats;
@@ -104,6 +149,12 @@ int main(int argc, char **argv) {
          stats.total_ops, stats.write_ops, stats.read_ops);
 
   kv_engine_cleanup(engine);
-  printf("\nEngine cleaned up. Done.\n");
+  if (failure_count > 0) {
+    fprintf(stderr, "\nMulti-SSD smoke test FAILED (%d failures).\n",
+            failure_count);
+    return 1;
+  }
+
+  printf("\nMulti-SSD smoke test PASSED.\n");
   return 0;
 }
