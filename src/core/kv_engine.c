@@ -38,7 +38,7 @@ static kv_result_t map_kvs_result(kvs_result kvs_res) {
 
 kv_result_t kv_engine_init(kv_engine_t **engine,
                            const kv_engine_config_t *config) {
-  if (!engine || !config || !config->device_path) {
+  if (!engine || !config) {
     return KV_ERR_INVALID_PARAM;
   }
 

@@ -36,6 +36,6 @@ jobs:
         run: |
           ./scripts/exec.sh DOCKER ./scripts/clang_format.sh NOEDIT
           
-      - name: Build initial engine and run test examples
+      - name: Build engine and run smoke tests (includes multi-SSD)
         run: |
           ./scripts/run_examples.sh
