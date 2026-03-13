@@ -61,13 +61,13 @@ typedef void (*kv_completion_cb)(kv_result_t result, void *user_data);
  * Completion callback for async retrieve operations
  *
  * @param result Operation result code
- * @param value Retrieved value buffer (caller must free with kv_engine_free_buffer),
- *              NULL on failure
+ * @param value Retrieved value buffer (caller must free with
+ * kv_engine_free_buffer), NULL on failure
  * @param value_len Length of retrieved value, 0 on failure
  * @param user_data User-provided context pointer
  */
-typedef void (*kv_retrieve_cb)(kv_result_t result, void *value, size_t value_len,
-                                void *user_data);
+typedef void (*kv_retrieve_cb)(kv_result_t result, void *value,
+                               size_t value_len, void *user_data);
 
 /**
  * Configuration options for engine initialization

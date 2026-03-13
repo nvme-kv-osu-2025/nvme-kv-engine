@@ -160,9 +160,8 @@ kv_result_t kv_engine_retrieve_async(kv_engine_t *engine, const void *key,
     return KV_ERR_NOT_INITIALIZED;
   }
 
-  async_context_t *ctx =
-      async_context_create(engine, ASYNC_OP_RETRIEVE, key, key_len, NULL, 0,
-                           NULL, user_data, false);
+  async_context_t *ctx = async_context_create(
+      engine, ASYNC_OP_RETRIEVE, key, key_len, NULL, 0, NULL, user_data, false);
   if (!ctx) {
     return KV_ERR_NO_MEMORY;
   }
