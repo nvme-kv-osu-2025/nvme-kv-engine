@@ -29,14 +29,43 @@ typedef struct {
 } memory_pool_t;
 
 /**
+ * Work item for the thread pool queue
+ */
+typedef struct work_item {
+  void *(*func)(void *);
+  void *arg;
+  void (*cleanup)(void *);
+  struct work_item *next;
+} work_item_t;
+
+/**
  * Thread pool for async operations
  */
 typedef struct {
   pthread_t *threads;
   uint32_t num_threads;
   int shutdown;
-  // TODO: Add work queue
+
+  /* Bounded work queue (singly-linked list) */
+  work_item_t *queue_head;
+  work_item_t *queue_tail;
+  uint32_t queue_size;
+  uint32_t queue_capacity;
+
+  /* Synchronization */
+  pthread_mutex_t queue_lock;
+  pthread_cond_t queue_not_empty;
+  pthread_cond_t queue_not_full;
 } thread_pool_t;
+
+/**
+ * Operation type for async dispatch
+ */
+typedef enum {
+  ASYNC_OP_STORE,
+  ASYNC_OP_RETRIEVE,
+  ASYNC_OP_DELETE
+} async_op_type_t;
 
 /**
  * Async operation context
@@ -44,11 +73,14 @@ typedef struct {
 typedef struct {
   kv_engine_t *engine;
   kv_completion_cb callback;
+  kv_retrieve_cb retrieve_callback;
   void *user_data;
   void *key_buffer;
   size_t key_len;
   void *value_buffer;
   size_t value_len;
+  bool overwrite;
+  async_op_type_t op_type;
 } async_context_t;
 
 /**
@@ -81,6 +113,9 @@ struct kv_engine {
   kv_engine_stats_t stats;
   pthread_mutex_t stats_lock;
 
+  /* Hash table lock (uthash is not thread-safe) */
+  pthread_mutex_t hash_lock;
+
   /* Hash table */
   hash_table_t key_table;
 
@@ -100,8 +135,9 @@ void memory_pool_free(memory_pool_t *pool, void *ptr);
 void memory_pool_destroy(memory_pool_t *pool);
 
 /* Thread pool operations */
-thread_pool_t *thread_pool_create(uint32_t num_threads);
-int thread_pool_submit(thread_pool_t *pool, void *(*func)(void *), void *arg);
+thread_pool_t *thread_pool_create(uint32_t num_threads, uint32_t queue_depth);
+int thread_pool_submit(thread_pool_t *pool, void *(*func)(void *), void *arg,
+                       void (*cleanup)(void *));
 void thread_pool_destroy(thread_pool_t *pool);
 
 /* Statistics helpers */

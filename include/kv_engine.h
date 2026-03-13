@@ -50,12 +50,24 @@ typedef enum {
 } kv_result_t;
 
 /**
- * Completion callback for async operations
+ * Completion callback for async operations (store, delete)
  *
  * @param result Operation result code
  * @param user_data User-provided context pointer
  */
 typedef void (*kv_completion_cb)(kv_result_t result, void *user_data);
+
+/**
+ * Completion callback for async retrieve operations
+ *
+ * @param result Operation result code
+ * @param value Retrieved value buffer (caller must free with
+ * kv_engine_free_buffer), NULL on failure
+ * @param value_len Length of retrieved value, 0 on failure
+ * @param user_data User-provided context pointer
+ */
+typedef void (*kv_retrieve_cb)(kv_result_t result, void *value,
+                               size_t value_len, void *user_data);
 
 /**
  * Configuration options for engine initialization
@@ -201,12 +213,12 @@ kv_result_t kv_engine_store_async(kv_engine_t *engine, const void *key,
  * @param engine Engine handle
  * @param key Key buffer
  * @param key_len Key length
- * @param callback Completion callback
+ * @param callback Retrieve completion callback (receives value and length)
  * @param user_data User context for callback
  * @return KV_SUCCESS if submitted, error code otherwise
  */
 kv_result_t kv_engine_retrieve_async(kv_engine_t *engine, const void *key,
-                                     size_t key_len, kv_completion_cb callback,
+                                     size_t key_len, kv_retrieve_cb callback,
                                      void *user_data);
 
 /**

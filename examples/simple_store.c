@@ -60,7 +60,7 @@ int main(int argc, char **argv) {
   }
 
   printf("Retrieved: '%.*s'\n", (int)retrieved_len, (char *)retrieved_value);
-  free(retrieved_value);
+  kv_engine_free_buffer(engine, retrieved_value);
 
   /* Check existence */
   int exists = 0;

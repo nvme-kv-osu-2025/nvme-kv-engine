@@ -88,7 +88,7 @@ int main(int argc, char **argv) {
       fprintf(stderr, "  RETRIEVE FAILED for key '%s': %d\n", key, res);
     } else {
       printf("  Retrieved key '%s' -> '%s'\n", key, (char *)value);
-      free(value);
+      kv_engine_free_buffer(engine, value);
       success_count++;
     }
   }

@@ -38,24 +38,16 @@ static kv_result_t map_kvs_result(kvs_result kvs_res) {
 
 kv_result_t kv_engine_init(kv_engine_t **engine,
                            const kv_engine_config_t *config) {
-  if (!engine || !config) {
+  if (!engine || !config || !config->device_path) {
     return KV_ERR_INVALID_PARAM;
   }
 
-  /* Determine effective device list */
-  const char *effective_paths[KV_MAX_DEVICES];
-  uint32_t effective_count = 0;
-  kv_result_t res =
-      kv_engine_resolve_device_paths(config, effective_paths, &effective_count);
-  if (res != KV_SUCCESS) {
-    return res;
-  }
-
   /* Allocate engine structure */
-  kv_engine_t *eng = (kv_engine_t *)calloc(1, sizeof(kv_engine_t));
+  kv_engine_t *eng = (kv_engine_t *)malloc(sizeof(kv_engine_t));
   if (!eng) {
     return KV_ERR_NO_MEMORY;
   }
+  memset(eng, 0, sizeof(kv_engine_t));
 
   /* Copy configuration */
   eng->config = *config;
@@ -66,18 +58,23 @@ kv_result_t kv_engine_init(kv_engine_t **engine,
     eng->config.emul_config_file = strdup(config->emul_config_file);
   }
 
+  /* Resolve device paths (single or multi-device) */
+  const char *effective_paths[KV_MAX_DEVICES];
+  uint32_t effective_count = 0;
+  kv_result_t res =
+      kv_engine_resolve_device_paths(config, effective_paths, &effective_count);
+  if (res != KV_SUCCESS) {
+    free(eng);
+    return res;
+  }
+
   /* Open all devices */
-  eng->num_devices = 0;
   for (uint32_t i = 0; i < effective_count; i++) {
-    kv_result_t res =
-        kv_engine_open_device(&eng->devices[i], effective_paths[i], i);
+    res = kv_engine_open_device(&eng->devices[i], effective_paths[i], i);
     if (res != KV_SUCCESS) {
-      /* Rollback: close all previously opened devices */
       for (uint32_t j = 0; j < i; j++) {
         kv_engine_close_device(&eng->devices[j]);
       }
-      free((void *)eng->config.device_path);
-      free((void *)eng->config.emul_config_file);
       free(eng);
       return res;
     }
@@ -93,23 +90,19 @@ kv_result_t kv_engine_init(kv_engine_t **engine,
     for (uint32_t i = 0; i < eng->num_devices; i++) {
       kv_engine_close_device(&eng->devices[i]);
     }
-    free((void *)eng->config.device_path);
-    free((void *)eng->config.emul_config_file);
     free(eng);
     return KV_ERR_NO_MEMORY;
   }
 
   /* Initialize thread pool for async ops */
-  eng->workers = NULL;
   if (config->num_worker_threads > 0) {
-    eng->workers = thread_pool_create(config->num_worker_threads);
+    eng->workers =
+        thread_pool_create(config->num_worker_threads, config->queue_depth);
     if (!eng->workers) {
       memory_pool_destroy(eng->mem_pool);
       for (uint32_t i = 0; i < eng->num_devices; i++) {
         kv_engine_close_device(&eng->devices[i]);
       }
-      free((void *)eng->config.device_path);
-      free((void *)eng->config.emul_config_file);
       free(eng);
       return KV_ERR_NO_MEMORY;
     }
@@ -119,21 +112,11 @@ kv_result_t kv_engine_init(kv_engine_t **engine,
   pthread_mutex_init(&eng->stats_lock, NULL);
   memset(&eng->stats, 0, sizeof(kv_engine_stats_t));
 
+  /* Initialize hash table lock */
+  pthread_mutex_init(&eng->hash_lock, NULL);
+
   /* Initialize hash table */
-  if (create_table(&eng->key_table) != 0) {
-    if (eng->workers) {
-      thread_pool_destroy(eng->workers);
-    }
-    memory_pool_destroy(eng->mem_pool);
-    for (uint32_t i = 0; i < eng->num_devices; i++) {
-      kv_engine_close_device(&eng->devices[i]);
-    }
-    free((void *)eng->config.device_path);
-    free((void *)eng->config.emul_config_file);
-    pthread_mutex_destroy(&eng->stats_lock);
-    free(eng);
-    return KV_ERR_NO_MEMORY;
-  }
+  create_table(&eng->key_table);
 
   eng->initialized = 1;
   *engine = eng;
@@ -172,6 +155,7 @@ void kv_engine_cleanup(kv_engine_t *engine) {
   }
 
   pthread_mutex_destroy(&engine->stats_lock);
+  pthread_mutex_destroy(&engine->hash_lock);
   free(engine);
 }
 
@@ -192,7 +176,9 @@ kv_result_t kv_engine_store(kv_engine_t *engine, const void *key,
     return KV_ERR_INVALID_PARAM;
   }
 
+  /* Shard key to a device */
   uint32_t dev_idx = kv_engine_shard_for_key(key, key_len, engine->num_devices);
+  kvs_key_space_handle keyspace = engine->devices[dev_idx].keyspace;
 
   /* Prepare Samsung KV structures */
   kvs_key kv_key;
@@ -203,8 +189,6 @@ kv_result_t kv_engine_store(kv_engine_t *engine, const void *key,
   void *value_ptr = (void *)value;
   void *aligned_buf = NULL;
 
-  // if user's buffer is not 4096-byte aligned,
-  // allocate temp buffer and copy data
   if (!IS_DMA_ALIGNED(value)) {
     aligned_buf = dma_alloc(value_len);
     if (!aligned_buf) {
@@ -220,24 +204,22 @@ kv_result_t kv_engine_store(kv_engine_t *engine, const void *key,
   kv_value.actual_value_size = value_len;
   kv_value.offset = 0;
 
-  // add key to in-memory index if missing
-  add_key(&engine->key_table, key, key_len);
+  pthread_mutex_lock(&engine->hash_lock);
+  if (!key_in_table(&engine->key_table, key, key_len)) {
+    add_key(&engine->key_table, key, key_len);
+  }
+  pthread_mutex_unlock(&engine->hash_lock);
 
   /* Perform store operation */
   kvs_option_store option;
-  /* check if user wants to overwrite if key exists (device will enforce) */
   option.st_type = overwrite ? KVS_STORE_POST : KVS_STORE_NOOVERWRITE;
-  kvs_result kvs_res = kvs_store_kvp(engine->devices[dev_idx].keyspace, &kv_key,
-                                     &kv_value, &option);
+  kvs_result kvs_res = kvs_store_kvp(keyspace, &kv_key, &kv_value, &option);
 
-  /* free temporary aligned buffer if one was allocated */
   if (aligned_buf) {
     dma_free(aligned_buf);
   }
 
-  /* Update statistics */
   update_stats(engine, 0, 1, 0, kvs_res == KVS_SUCCESS, value_len);
-
   return map_kvs_result(kvs_res);
 }
 
@@ -253,32 +235,29 @@ kv_result_t kv_engine_retrieve(kv_engine_t *engine, const void *key,
     return KV_ERR_INVALID_PARAM;
   }
 
+  /* Shard key to a device */
   uint32_t dev_idx = kv_engine_shard_for_key(key, key_len, engine->num_devices);
+  kvs_key_space_handle keyspace = engine->devices[dev_idx].keyspace;
 
   /* Prepare key */
   kvs_key kv_key;
   kv_key.key = (void *)key;
   kv_key.length = key_len;
 
-  /* intial key retrieve buffer */
   void *buffer = dma_alloc(KV_ENGINE_RETRIEVE_SIZE);
-
   if (!buffer) {
     return KV_ERR_NO_MEMORY;
   }
 
-  /* Prepare value structure */
   kvs_value kv_value;
   kv_value.value = buffer;
   kv_value.length = KV_ENGINE_RETRIEVE_SIZE;
   kv_value.actual_value_size = 0;
   kv_value.offset = 0;
 
-  /* Retrieve the value */
   kvs_option_retrieve option;
   option.kvs_retrieve_delete = delete_value;
-  kvs_result kvs_res = kvs_retrieve_kvp(engine->devices[dev_idx].keyspace,
-                                        &kv_key, &option, &kv_value);
+  kvs_result kvs_res = kvs_retrieve_kvp(keyspace, &kv_key, &option, &kv_value);
 
   if (kvs_res == KVS_ERR_BUFFER_SMALL) {
     dma_free(buffer);
@@ -291,13 +270,13 @@ kv_result_t kv_engine_retrieve(kv_engine_t *engine, const void *key,
     kv_value.value = buffer;
     kv_value.length = kv_value.actual_value_size;
     kv_value.offset = 0;
-    kvs_res = kvs_retrieve_kvp(engine->devices[dev_idx].keyspace, &kv_key,
-                               &option, &kv_value);
+    kvs_res = kvs_retrieve_kvp(keyspace, &kv_key, &option, &kv_value);
   }
 
   if (delete_value && kvs_res == KVS_SUCCESS) {
-    /* Remove from hash table */
+    pthread_mutex_lock(&engine->hash_lock);
     delete_key(&engine->key_table, key, key_len);
+    pthread_mutex_unlock(&engine->hash_lock);
   }
 
   if (kvs_res != KVS_SUCCESS) {
@@ -323,28 +302,27 @@ kv_result_t kv_engine_delete(kv_engine_t *engine, const void *key,
     return KV_ERR_INVALID_PARAM;
   }
 
+  /* Shard key to a device */
   uint32_t dev_idx = kv_engine_shard_for_key(key, key_len, engine->num_devices);
+  kvs_key_space_handle keyspace = engine->devices[dev_idx].keyspace;
 
-  /* Prepare key */
   kvs_key kv_key;
   kv_key.key = (void *)key;
   kv_key.length = key_len;
 
-  /* Perform delete */
   kvs_option_delete option;
-  option.kvs_delete_error = false; /* Don't error if key doesn't exist */
-  kvs_result kvs_res =
-      kvs_delete_kvp(engine->devices[dev_idx].keyspace, &kv_key, &option);
+  option.kvs_delete_error = false;
+  kvs_result kvs_res = kvs_delete_kvp(keyspace, &kv_key, &option);
 
+  pthread_mutex_lock(&engine->hash_lock);
   delete_key(&engine->key_table, key, key_len);
+  pthread_mutex_unlock(&engine->hash_lock);
 
   update_stats(engine, 0, 0, 1, kvs_res == KVS_SUCCESS, 0);
   return map_kvs_result(kvs_res);
 }
 
-// Current exists checks both in Samsung KV and in the hash table
-// TODO: discuss if this is the desired behavior, potentially delete hash table
-// check and only check ssd if false
+// TODO: discuss if checking both hash table and device is desired behavior
 kv_result_t kv_engine_exists(kv_engine_t *engine, const void *key,
                              size_t key_len, int *exists) {
   if (!engine || !engine->initialized || !key || !exists) {
@@ -355,16 +333,18 @@ kv_result_t kv_engine_exists(kv_engine_t *engine, const void *key,
     return KV_ERR_INVALID_PARAM;
   }
 
+  /* Shard key to a device */
   uint32_t dev_idx = kv_engine_shard_for_key(key, key_len, engine->num_devices);
+  kvs_key_space_handle keyspace = engine->devices[dev_idx].keyspace;
 
+  pthread_mutex_lock(&engine->hash_lock);
   uint8_t hash_value_check = key_in_table(&engine->key_table, key, key_len);
+  pthread_mutex_unlock(&engine->hash_lock);
 
-  /* Prepare key */
   kvs_key kv_key;
   kv_key.key = (void *)key;
   kv_key.length = key_len;
 
-  /* Check existence */
   uint8_t result_buffer;
   kvs_exist_list exist_list;
   exist_list.num_keys = 1;
@@ -372,8 +352,7 @@ kv_result_t kv_engine_exists(kv_engine_t *engine, const void *key,
   exist_list.length = 1;
   exist_list.result_buffer = &result_buffer;
 
-  kvs_result kvs_res = kvs_exist_kv_pairs(engine->devices[dev_idx].keyspace, 1,
-                                          &kv_key, &exist_list);
+  kvs_result kvs_res = kvs_exist_kv_pairs(keyspace, 1, &kv_key, &exist_list);
 
   if (kvs_res != KVS_SUCCESS) {
     return map_kvs_result(kvs_res);
@@ -437,11 +416,11 @@ void kv_engine_reset_stats(kv_engine_t *engine) {
 }
 
 void *kv_engine_alloc_buffer(kv_engine_t *engine, size_t size) {
-  (void)engine; // make parameter available for buffer pooling
+  (void)engine;
   return dma_alloc(size);
 }
 
 void kv_engine_free_buffer(kv_engine_t *engine, void *buffer) {
-  (void)engine; // make parameter available for buffer pooling
+  (void)engine;
   dma_free(buffer);
 }
