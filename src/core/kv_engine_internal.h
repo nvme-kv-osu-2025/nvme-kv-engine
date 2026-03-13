@@ -73,6 +73,7 @@ typedef enum {
 typedef struct {
   kv_engine_t *engine;
   kv_completion_cb callback;
+  kv_retrieve_cb retrieve_callback;
   void *user_data;
   void *key_buffer;
   size_t key_len;

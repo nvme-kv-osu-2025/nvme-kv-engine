@@ -31,6 +31,7 @@ async_context_create(kv_engine_t *engine, async_op_type_t op_type,
   ctx->engine = engine;
   ctx->op_type = op_type;
   ctx->callback = callback;
+  ctx->retrieve_callback = NULL;
   ctx->user_data = user_data;
   ctx->overwrite = overwrite;
   ctx->key_len = key_len;
@@ -85,10 +86,12 @@ static void *async_worker_func(void *arg) {
     size_t value_len = 0;
     result = kv_engine_retrieve(ctx->engine, ctx->key_buffer, ctx->key_len,
                                 &value, &value_len, false);
-    if (result == KV_SUCCESS && value) {
-      dma_free(value);
+    if (ctx->retrieve_callback) {
+      ctx->retrieve_callback(result, value, value_len, ctx->user_data);
     }
-    break;
+    /* Caller is responsible for freeing value via kv_engine_free_buffer */
+    async_context_free(ctx);
+    return NULL;
   }
 
   case ASYNC_OP_DELETE:
@@ -145,7 +148,7 @@ kv_result_t kv_engine_store_async(kv_engine_t *engine, const void *key,
 }
 
 kv_result_t kv_engine_retrieve_async(kv_engine_t *engine, const void *key,
-                                     size_t key_len, kv_completion_cb callback,
+                                     size_t key_len, kv_retrieve_cb callback,
                                      void *user_data) {
   if (!engine || !engine->initialized || !key) {
     return KV_ERR_INVALID_PARAM;
@@ -159,10 +162,11 @@ kv_result_t kv_engine_retrieve_async(kv_engine_t *engine, const void *key,
 
   async_context_t *ctx =
       async_context_create(engine, ASYNC_OP_RETRIEVE, key, key_len, NULL, 0,
-                           callback, user_data, false);
+                           NULL, user_data, false);
   if (!ctx) {
     return KV_ERR_NO_MEMORY;
   }
+  ctx->retrieve_callback = callback;
 
   if (thread_pool_submit(engine->workers, async_worker_func, ctx,
                          async_context_free) != 0) {

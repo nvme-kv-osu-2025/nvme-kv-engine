@@ -85,13 +85,6 @@ kv_result_t kv_engine_init(kv_engine_t **engine,
       free(eng);
       return KV_ERR_DEVICE_OPEN;
     }
-    free((void *)eng->config.device_path);
-    free((void *)eng->config.emul_config_file);
-    pthread_mutex_destroy(&eng->stats_lock);
-    free(eng);
-    return KV_ERR_NO_MEMORY;
-  }
-
     /* Now open it */
     kvs_res = kvs_open_key_space(eng->device, keyspace_name, &eng->keyspace);
     if (kvs_res != KVS_SUCCESS) {

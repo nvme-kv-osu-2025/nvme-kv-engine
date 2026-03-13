@@ -173,8 +173,6 @@ void thread_pool_destroy(thread_pool_t *pool) {
     work_item_t *next = item->next;
     if (item->cleanup) {
       item->cleanup(item->arg);
-    } else {
-      free(item->arg);
     }
     free(item);
     item = next;
