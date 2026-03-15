@@ -12,8 +12,6 @@ echo '=== Running simple_store on /dev/kvemul1 ===' && \
 ./simple_store /dev/kvemul1 && \
 echo '=== Running simple_cache on /dev/kvemul2 ===' && \
 ./simple_cache /dev/kvemul2 && \
-echo '=== Running multi_device_example on 2 SSDs ===' && \
-./multi_device_example /dev/kvemul0 /dev/kvemul1 && \
-echo '=== Running multi_device_example on 4 SSDs ===' && \
-./multi_device_example /dev/kvemul0 /dev/kvemul1 /dev/kvemul2 /dev/kvemul3
+echo '=== Running dedicated multi-SSD test matrix ===' && \
+/user/scripts/test_multi_ssd.sh
 "
