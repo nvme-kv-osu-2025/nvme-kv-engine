@@ -11,5 +11,7 @@ echo '=== Running simple_store on /dev/kvemul0 ===' && \
 echo '=== Running simple_store on /dev/kvemul1 ===' && \
 ./simple_store /dev/kvemul1 && \
 echo '=== Running simple_cache on /dev/kvemul2 ===' && \
-./simple_cache /dev/kvemul2
+./simple_cache /dev/kvemul2 && \
+echo '=== Running dedicated multi-SSD test matrix ===' && \
+/user/scripts/test_multi_ssd.sh
 "
