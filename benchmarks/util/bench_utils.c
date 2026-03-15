@@ -39,15 +39,16 @@ static const char *kv_result_to_string(kv_result_t result) {
   }
 }
 
-kv_result_t init_engine(kv_engine_t **engine, const char *device_path,
-                        const kv_engine_config_t *config) {
-  kv_engine_config_t default_config = {.device_path = device_path,
-                                       .emul_config_file =
-                                           "/kvssd/PDK/core/kvssd_emul.conf",
-                                       .memory_pool_size = 64 * 1024 * 1024,
-                                       .queue_depth = 128,
-                                       .num_worker_threads = 16,
-                                       .enable_stats = 1};
+kv_result_t init_engine(kv_engine_t** engine, const char* device_path, const kv_engine_config_t* config) {
+    kv_engine_config_t default_config = {
+        .device_path = device_path,
+        .emul_config_file = "/kvssd/PDK/core/kvssd_emul.conf",
+        .memory_pool_size = 64 * 1024 * 1024,
+        .queue_depth = 128,
+        .num_worker_threads = 16,
+        .enable_stats = 1,
+        .dma_pool_count = 16
+    };
 
   // Use provided config or fall back to defaults
   const kv_engine_config_t *active_config = config ? config : &default_config;

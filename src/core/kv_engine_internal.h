@@ -6,6 +6,7 @@
 #ifndef KV_ENGINE_INTERNAL_H
 #define KV_ENGINE_INTERNAL_H
 
+#include "../utils/dma_pool.h"
 #include "../utils/hashTable.h"
 #include "kv_engine.h"
 #include <kvs_api.h>
@@ -105,6 +106,7 @@ struct kv_engine {
 
   /* Memory management */
   memory_pool_t *mem_pool;
+  dma_pool_t *buffer_pool;
 
   /* Async I/O */
   thread_pool_t *workers;

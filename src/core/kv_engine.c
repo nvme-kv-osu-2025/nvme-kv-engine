@@ -112,11 +112,32 @@ kv_result_t kv_engine_init(kv_engine_t **engine,
   pthread_mutex_init(&eng->stats_lock, NULL);
   memset(&eng->stats, 0, sizeof(kv_engine_stats_t));
 
-  /* Initialize hash table lock */
-  pthread_mutex_init(&eng->hash_lock, NULL);
+  /* Initialize DMA buffer pool (optional, 0 disables it) */
+  eng->buffer_pool = NULL;
+  if (config->dma_pool_count > 0) {
+    eng->buffer_pool =
+        dma_pool_create(KV_ENGINE_RETRIEVE_SIZE, config->dma_pool_count);
+    /* Non-fatal: engine continues without pooling if creation fails */
+  }
 
   /* Initialize hash table */
-  create_table(&eng->key_table);
+  if (create_table(&eng->key_table) != 0) {
+    if (eng->buffer_pool) {
+      dma_pool_destroy(eng->buffer_pool);
+    }
+    if (eng->workers) {
+      thread_pool_destroy(eng->workers);
+    }
+    memory_pool_destroy(eng->mem_pool);
+    for (uint32_t i = 0; i < eng->num_devices; i++) {
+      kv_engine_close_device(&eng->devices[i]);
+    }
+    free((void *)eng->config.device_path);
+    free((void *)eng->config.emul_config_file);
+    pthread_mutex_destroy(&eng->stats_lock);
+    free(eng);
+    return KV_ERR_NO_MEMORY;
+  }
 
   eng->initialized = 1;
   *engine = eng;
@@ -132,6 +153,11 @@ void kv_engine_cleanup(kv_engine_t *engine) {
   /* Shutdown thread pool */
   if (engine->workers) {
     thread_pool_destroy(engine->workers);
+  }
+
+  /* Cleanup DMA buffer pool */
+  if (engine->buffer_pool) {
+    dma_pool_destroy(engine->buffer_pool);
   }
 
   /* Cleanup memory pool */
@@ -244,7 +270,18 @@ kv_result_t kv_engine_retrieve(kv_engine_t *engine, const void *key,
   kv_key.key = (void *)key;
   kv_key.length = key_len;
 
-  void *buffer = dma_alloc(KV_ENGINE_RETRIEVE_SIZE);
+  /* Initial key retrieve buffer */
+  bool from_pool = false;
+  void *buffer = NULL;
+
+  if (engine->buffer_pool) {
+    buffer = dma_pool_acquire(engine->buffer_pool);
+    from_pool = (buffer != NULL);
+  }
+  if (!buffer) {
+    buffer = dma_alloc(KV_ENGINE_RETRIEVE_SIZE);
+  }
+
   if (!buffer) {
     return KV_ERR_NO_MEMORY;
   }
@@ -260,9 +297,14 @@ kv_result_t kv_engine_retrieve(kv_engine_t *engine, const void *key,
   kvs_result kvs_res = kvs_retrieve_kvp(keyspace, &kv_key, &option, &kv_value);
 
   if (kvs_res == KVS_ERR_BUFFER_SMALL) {
-    dma_free(buffer);
-
+    if (from_pool) {
+      dma_pool_release(engine->buffer_pool, buffer);
+      from_pool = false;
+    } else {
+      dma_free(buffer);
+    }
     buffer = dma_alloc(kv_value.actual_value_size);
+
     if (!buffer) {
       return KV_ERR_NO_MEMORY;
     }
@@ -280,7 +322,11 @@ kv_result_t kv_engine_retrieve(kv_engine_t *engine, const void *key,
   }
 
   if (kvs_res != KVS_SUCCESS) {
-    dma_free(buffer);
+    if (from_pool) {
+      dma_pool_release(engine->buffer_pool, buffer);
+    } else {
+      dma_free(buffer);
+    }
     update_stats(engine, 1, 0, 0, 0, 0);
     return map_kvs_result(kvs_res);
   }
@@ -416,11 +462,19 @@ void kv_engine_reset_stats(kv_engine_t *engine) {
 }
 
 void *kv_engine_alloc_buffer(kv_engine_t *engine, size_t size) {
-  (void)engine;
+  if (engine->buffer_pool && size <= engine->buffer_pool->buffer_size) {
+    void *buf = dma_pool_acquire(engine->buffer_pool);
+    if (buf) {
+      return buf;
+    }
+  }
   return dma_alloc(size);
 }
 
 void kv_engine_free_buffer(kv_engine_t *engine, void *buffer) {
-  (void)engine;
+  if (engine->buffer_pool && dma_pool_owns(engine->buffer_pool, buffer)) {
+    dma_pool_release(engine->buffer_pool, buffer);
+    return;
+  }
   dma_free(buffer);
 }
