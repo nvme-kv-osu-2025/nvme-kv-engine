@@ -177,9 +177,9 @@ int main(int argc, char **argv) {
         failure_count++;
       } else {
         printf("  Retrieved key '%s' -> '%s'\n", key, (char *)value);
+        success_count++;
       }
       kv_engine_free_buffer(engine, value);
-      success_count++;
     }
   }
 
