@@ -11,6 +11,7 @@
 #include "kv_engine.h"
 #include <kvs_api.h>
 #include <pthread.h>
+#include <stdatomic.h>
 
 #define KV_ENGINE_RETRIEVE_SIZE 2 * 1024 * 1024 /* 2MB */
 
@@ -91,6 +92,17 @@ typedef struct {
   kvs_device_handle device;
   kvs_key_space_handle keyspace;
   char *device_path; /* owned copy for cleanup */
+
+  /* Health tracking (updated atomically on every operation) 
+   *
+   * Using _Atomic instead of a mutex because these fields will be 
+   * individually updated on every op and don't require multi-field
+   * consistency. */
+  _Atomic bool healthy;
+  _Atomic uint64_t consecutive_errors; /* resets to 0 on success */
+  _Atomic uint64_t total_errors;
+  _Atomic uint64_t total_ops;
+  uint32_t max_consecutive_errors; /* threshold for marking unhealthy; default 10 */
 } kv_device_ctx_t;
 
 /**
