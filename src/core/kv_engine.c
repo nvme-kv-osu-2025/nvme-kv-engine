@@ -73,8 +73,8 @@ static kv_result_t map_kvs_result(kvs_result kvs_res) {
 }
 
 /* Returns true if kvs_res indicates a hardware/device-level fault rather
-  * than an application-level error (e.g. key not found, duplicate key).
-  * Only device errors count toward the health degradation threshold. */    
+ * than an application-level error (e.g. key not found, duplicate key).
+ * Only device errors count toward the health degradation threshold. */
 static bool is_device_error(kvs_result kvs_res) {
   switch (kvs_res) {
   case KVS_ERR_SYS_IO:
@@ -89,8 +89,8 @@ static bool is_device_error(kvs_result kvs_res) {
 }
 
 /* Returns KV_ERR_DEVICE_DEGRADED if the device has been marked unhealthy,
-  * KV_SUCCESS otherwise. Called at the top of each sync operation to fail                                                
-  * fast before attempting a Samsung API call on a known-bad device. */    
+ * KV_SUCCESS otherwise. Called at the top of each sync operation to fail
+ * fast before attempting a Samsung API call on a known-bad device. */
 static kv_result_t check_device_health(kv_device_ctx_t *ctx) {
   if (!atomic_load(&ctx->healthy)) {
     return KV_ERR_DEVICE_DEGRADED;
@@ -98,10 +98,10 @@ static kv_result_t check_device_health(kv_device_ctx_t *ctx) {
   return KV_SUCCESS;
 }
 
-/* Records the outcome of a Samsung API call against a device's health                                                   
-  * counters. Device-level errors increment consecutive_errors and may mark
-  * the device unhealthy. Application-level errors reset consecutive_errors                                               
-  * since a valid response proves the device is alive. */  
+/* Records the outcome of a Samsung API call against a device's health
+ * counters. Device-level errors increment consecutive_errors and may mark
+ * the device unhealthy. Application-level errors reset consecutive_errors
+ * since a valid response proves the device is alive. */
 static void device_record_result(kv_device_ctx_t *ctx, kvs_result kvs_res) {
   atomic_fetch_add(&ctx->total_ops, 1);
 
