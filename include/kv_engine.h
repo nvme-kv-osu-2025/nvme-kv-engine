@@ -118,16 +118,19 @@ typedef struct {
  * physical device at the moment of the call.
  */
 typedef struct {
-  uint32_t device_index;        /**< Index into the engine's device array */
-  bool healthy;                 /**< false once consecutive_errors exceeds threshold, or on unplug */
-  uint64_t capacity_bytes;      /**< Total raw capacity reported by device */
-  uint32_t utilization_pct;     /**< 0-10000 (divide by 100 for percent; e.g. 4250 = 42.50%) */
-  uint64_t consecutive_errors;  /**< Device-level errors since last success; resets to 0 on success */
-  uint64_t total_errors;        /**< Cumulative device-level error count since engine init */
-  uint64_t total_ops;           /**< Cumulative operations attempted on this device */
-  char device_path[256];        /**< Null-terminated path (e.g. "/dev/kvemul0") */
+  uint32_t device_index; /**< Index into the engine's device array */
+  bool healthy; /**< false once consecutive_errors exceeds threshold, or on
+                   unplug */
+  uint64_t capacity_bytes;  /**< Total raw capacity reported by device */
+  uint32_t utilization_pct; /**< 0-10000 (divide by 100 for percent; e.g. 4250
+                               = 42.50%) */
+  uint64_t consecutive_errors; /**< Device-level errors since last success;
+                                  resets to 0 on success */
+  uint64_t total_errors; /**< Cumulative device-level error count since engine
+                            init */
+  uint64_t total_ops;    /**< Cumulative operations attempted on this device */
+  char device_path[256]; /**< Null-terminated path (e.g. "/dev/kvemul0") */
 } kv_device_health_t;
-
 
 /* ============================================================================
  * Lifecycle Management
@@ -323,7 +326,7 @@ uint32_t kv_engine_healthy_device_count(kv_engine_t *engine);
  * hash(key) % (N+1) produces a different index for ~80% of existing keys,
  * making that data appear missing.
  *
- * NOTE: if we wanted to support hot-add after writes, we would need to use a 
+ * NOTE: if we wanted to support hot-add after writes, we would need to use a
  * different hash sharding scheme (e.g. consistent hashing) that doesn't change
  * existing key mappings when N changes, then migrate existing keys to their
  * new locations.
@@ -334,8 +337,7 @@ uint32_t kv_engine_healthy_device_count(kv_engine_t *engine);
  *         KV_ERR_INVALID_PARAM if called after writes have started,
  *           or if num_devices == KV_MAX_DEVICES
  */
-kv_result_t kv_engine_add_device(kv_engine_t *engine,
-                                 const char *device_path);
+kv_result_t kv_engine_add_device(kv_engine_t *engine, const char *device_path);
 
 /* ============================================================================
  * Buffer Management
