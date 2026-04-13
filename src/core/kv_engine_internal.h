@@ -107,6 +107,21 @@ typedef struct {
 } kv_device_ctx_t;
 
 /**
+ * Background health probe - periodically retries unhealthy devices and
+ * re-marks them healthy after consecutive successful probes.
+ */
+typedef struct {
+  pthread_t thread;
+  _Atomic bool running;
+  pthread_cond_t cond; /* signalled by destroy() to wake the thread early */
+  pthread_mutex_t mutex;
+  uint32_t probe_interval_sec; /* seconds between probe sweeps; default 5 */
+  uint32_t recovery_threshold; /* consecutive successes before re-marking;
+                                  default 3 */
+  kv_engine_t *engine;         /* back-pointer to iterate devices */
+} health_probe_t;
+
+/**
  * Main engine structure (opaque in public API)
  */
 struct kv_engine {
@@ -136,6 +151,9 @@ struct kv_engine {
 
   /* State */
   int initialized;
+
+  /* Background health probe */
+  health_probe_t *health_probe;
 };
 
 /* ============================================================================
@@ -168,5 +186,9 @@ uint32_t kv_engine_shard_for_key(const void *key, size_t key_len,
 kv_result_t kv_engine_open_device(kv_device_ctx_t *ctx, const char *path,
                                   uint32_t dev_index);
 void kv_engine_close_device(kv_device_ctx_t *ctx);
+
+/* Health probe lifecycle */
+health_probe_t *health_probe_create(kv_engine_t *engine);
+void health_probe_destroy(health_probe_t *probe);
 
 #endif /* KV_ENGINE_INTERNAL_H */
