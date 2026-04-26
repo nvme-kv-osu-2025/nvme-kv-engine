@@ -228,6 +228,9 @@ kv_result_t kv_engine_init(kv_engine_t **engine,
     return KV_ERR_NO_MEMORY;
   }
 
+  /* Start background health probe thread */
+  eng->health_probe = health_probe_create(eng);
+
   eng->initialized = 1;
   *engine = eng;
 
@@ -238,6 +241,9 @@ void kv_engine_cleanup(kv_engine_t *engine) {
   if (!engine) {
     return;
   }
+
+  /* Stop health probe thread before closing devices */
+  health_probe_destroy(engine->health_probe);
 
   /* Shutdown thread pool */
   if (engine->workers) {

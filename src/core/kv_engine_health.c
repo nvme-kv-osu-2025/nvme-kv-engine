@@ -22,11 +22,11 @@ static void *health_probe_thread(void *arg) {
   health_probe_t *probe = (health_probe_t *)arg;
   kv_engine_t *engine = probe->engine;
 
-  /* Per-device recovery counters — local to this thread, no sharing needed */
+  /* per-device recovery counters (local to this thread, no sharing needed) */
   uint32_t recovery_counts[KV_MAX_DEVICES] = {0};
 
   while (atomic_load(&probe->running)) {
-    /* Sleep for probe_interval_sec, but wake immediately if destroy() signals */
+    /* sleep for probe_interval_sec, but wake immediately if destroy() signals */
     struct timespec deadline;
     clock_gettime(CLOCK_REALTIME, &deadline);
     deadline.tv_sec += probe->probe_interval_sec;
@@ -39,17 +39,27 @@ static void *health_probe_thread(void *arg) {
       break;
     }
 
-    /* TODO: implement recovery loop here */
-    /*
-     * For each device in engine->devices[0..num_devices-1]:
-     *   - Skip devices that are already healthy
-     *   - Call kvs_get_device_utilization() as a lightweight probe
-     *   - On KVS_SUCCESS: increment recovery_counts[i]
-     *       if recovery_counts[i] >= probe->recovery_threshold:
-     *           mark device healthy (atomic_store healthy=true, consecutive_errors=0)
-     *           reset recovery_counts[i] to 0
-     *   - On failure: reset recovery_counts[i] to 0
-     */
+    /* device recovery loop */
+    for (uint32_t i = 0; i < engine->num_devices; i++) {
+      kv_device_ctx_t *dev = &engine->devices[i];
+      if (atomic_load(&dev->healthy)) {
+        continue;
+      }
+
+      uint32_t utilization;
+      kvs_result res = kvs_get_device_utilization(dev->device, &utilization);
+      if (res == KVS_SUCCESS) {
+        recovery_counts[i]++;
+        if (recovery_counts[i] >= probe->recovery_threshold) {
+          atomic_store(&dev->healthy, true);
+          atomic_store(&dev->consecutive_errors, 0);
+          recovery_counts[i] = 0;
+        }
+      } else {
+        recovery_counts[i] = 0;
+      }
+    }
+    
   }
 
   return NULL;
