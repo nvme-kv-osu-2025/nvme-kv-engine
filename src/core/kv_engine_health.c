@@ -166,6 +166,29 @@ kv_result_t kv_engine_add_device(kv_engine_t *engine,
   if (!engine || !engine->initialized || !device_path) {
     return KV_ERR_INVALID_PARAM;
   }
-  /* Not yet implemented — Phase 2F */
-  return KV_ERR_INVALID_PARAM;
+
+  if (engine->num_devices >= KV_MAX_DEVICES) {
+    return KV_ERR_INVALID_PARAM;
+  }
+
+  /* reject hot-add after any writes  
+   * sharding is hash-mod-N, changing N would 
+   * reroute ~(N-1)/N of existing keys to wrong devices */
+  pthread_mutex_lock(&engine->stats_lock);
+  uint64_t writes = engine->stats.write_ops;
+  pthread_mutex_unlock(&engine->stats_lock);
+
+  if (writes > 0) {
+    return KV_ERR_INVALID_PARAM;
+  }
+
+  uint32_t new_idx = engine->num_devices;
+  kv_result_t res = kv_engine_open_device(&engine->devices[new_idx],
+                                           device_path, new_idx);
+  if (res != KV_SUCCESS) {
+    return res;
+  }
+
+  engine->num_devices++;
+  return KV_SUCCESS;
 }

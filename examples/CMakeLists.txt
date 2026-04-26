@@ -11,3 +11,6 @@ target_link_libraries(async_example nvme_kv_engine)
 
 add_executable(multi_device_example multi_device_example.c)
 target_link_libraries(multi_device_example nvme_kv_engine)
+
+add_executable(health_example health_example.c)
+target_link_libraries(health_example nvme_kv_engine)
