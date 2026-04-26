@@ -26,7 +26,8 @@ static void *health_probe_thread(void *arg) {
   uint32_t recovery_counts[KV_MAX_DEVICES] = {0};
 
   while (atomic_load(&probe->running)) {
-    /* sleep for probe_interval_sec, but wake immediately if destroy() signals */
+    /* sleep for probe_interval_sec, but wake immediately if destroy() signals
+     */
     struct timespec deadline;
     clock_gettime(CLOCK_REALTIME, &deadline);
     deadline.tv_sec += probe->probe_interval_sec;
@@ -59,7 +60,6 @@ static void *health_probe_thread(void *arg) {
         recovery_counts[i] = 0;
       }
     }
-    
   }
 
   return NULL;
@@ -117,8 +117,8 @@ void health_probe_destroy(health_probe_t *probe) {
  */
 
 kv_result_t kv_engine_get_device_health(kv_engine_t *engine,
-                                         uint32_t device_index,
-                                         kv_device_health_t *health) {
+                                        uint32_t device_index,
+                                        kv_device_health_t *health) {
   if (!engine || !engine->initialized || !health) {
     return KV_ERR_INVALID_PARAM;
   }
@@ -161,8 +161,7 @@ uint32_t kv_engine_healthy_device_count(kv_engine_t *engine) {
   return count;
 }
 
-kv_result_t kv_engine_add_device(kv_engine_t *engine,
-                                  const char *device_path) {
+kv_result_t kv_engine_add_device(kv_engine_t *engine, const char *device_path) {
   if (!engine || !engine->initialized || !device_path) {
     return KV_ERR_INVALID_PARAM;
   }
@@ -171,8 +170,8 @@ kv_result_t kv_engine_add_device(kv_engine_t *engine,
     return KV_ERR_INVALID_PARAM;
   }
 
-  /* reject hot-add after any writes  
-   * sharding is hash-mod-N, changing N would 
+  /* reject hot-add after any writes
+   * sharding is hash-mod-N, changing N would
    * reroute ~(N-1)/N of existing keys to wrong devices */
   pthread_mutex_lock(&engine->stats_lock);
   uint64_t writes = engine->stats.write_ops;
@@ -183,8 +182,8 @@ kv_result_t kv_engine_add_device(kv_engine_t *engine,
   }
 
   uint32_t new_idx = engine->num_devices;
-  kv_result_t res = kv_engine_open_device(&engine->devices[new_idx],
-                                           device_path, new_idx);
+  kv_result_t res =
+      kv_engine_open_device(&engine->devices[new_idx], device_path, new_idx);
   if (res != KV_SUCCESS) {
     return res;
   }

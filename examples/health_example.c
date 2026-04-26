@@ -15,8 +15,8 @@
 #include <string.h>
 
 static void print_health(kv_engine_t *engine, uint32_t num_devices) {
-  printf("  healthy devices: %u / %u\n",
-         kv_engine_healthy_device_count(engine), num_devices);
+  printf("  healthy devices: %u / %u\n", kv_engine_healthy_device_count(engine),
+         num_devices);
 
   for (uint32_t i = 0; i < num_devices; i++) {
     kv_device_health_t h;
@@ -80,7 +80,8 @@ int main(int argc, char **argv) {
     char key[32], value[64];
     snprintf(key, sizeof(key), "health:key:%04d", i);
     snprintf(value, sizeof(value), "value-%d", i);
-    res = kv_engine_store(engine, key, strlen(key), value, strlen(value), false);
+    res =
+        kv_engine_store(engine, key, strlen(key), value, strlen(value), false);
     if (res != KV_SUCCESS) {
       fprintf(stderr, "Store %d failed: %d\n", i, res);
     }
@@ -108,7 +109,8 @@ int main(int argc, char **argv) {
     kv_device_health_t h;
     kv_engine_get_device_health(engine, i, &h);
     if (!h.healthy) {
-      fprintf(stderr, "FAIL: device %u marked unhealthy after cache misses\n", i);
+      fprintf(stderr, "FAIL: device %u marked unhealthy after cache misses\n",
+              i);
       kv_engine_cleanup(engine);
       return 1;
     }
@@ -122,7 +124,8 @@ int main(int argc, char **argv) {
 
   res = kv_engine_add_device(engine, argv[1]);
   if (res == KV_ERR_INVALID_PARAM) {
-    printf("  PASS: add_device correctly rejected after writes (err=%d)\n", res);
+    printf("  PASS: add_device correctly rejected after writes (err=%d)\n",
+           res);
   } else {
     fprintf(stderr, "  FAIL: expected KV_ERR_INVALID_PARAM, got %d\n", res);
     kv_engine_cleanup(engine);
