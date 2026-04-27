@@ -65,3 +65,4 @@ dkms.conf
 .vscode/
 .zed/
 benchmarks/fio/results/
+benchmarks/results/

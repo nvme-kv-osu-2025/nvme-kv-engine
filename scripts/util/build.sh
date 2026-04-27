@@ -1,8 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
 # Then build the main project
 cd /user
 mkdir -p build && cd build
 cmake ..
-make
+make -j"$(nproc 2>/dev/null || echo 2)"
 
 # Run examples 
 # cd examples
