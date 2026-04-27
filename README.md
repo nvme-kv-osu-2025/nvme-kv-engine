@@ -1,6 +1,6 @@
 # nvme-kv-engine
 
-Key-value storage engine that bypasses traditional block-storage translation by issuing NVMe KV commands directly to the device via the Samsung KVSSD API. Instead of mapping key-value operations onto a filesystem or block layer, the engine talks to the SSD's native KV command set, eliminating the translation overhead entirely.
+A C storage engine that issues NVMe KV commands directly to the SSD, bypassing the block layer entirely for lower latency than conventional key-value stores.
 
 ## Features
 
