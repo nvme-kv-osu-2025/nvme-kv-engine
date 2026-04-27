@@ -21,9 +21,7 @@ uint64_t bench_time_ns(void) {
   return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
 }
 
-double bench_time_seconds(void) {
-  return (double)bench_time_ns() / 1e9;
-}
+double bench_time_seconds(void) { return (double)bench_time_ns() / 1e9; }
 
 double get_time_seconds(void) { return bench_time_seconds(); }
 
@@ -328,8 +326,10 @@ uint64_t bench_latvec_percentile(const bench_latvec_t *lv, double p) {
   if (!lv || lv->count == 0) {
     return 0;
   }
-  if (p < 0.0) p = 0.0;
-  if (p > 1.0) p = 1.0;
+  if (p < 0.0)
+    p = 0.0;
+  if (p > 1.0)
+    p = 1.0;
   size_t idx = (size_t)((double)(lv->count - 1) * p + 0.5);
   if (idx >= lv->count) {
     idx = lv->count - 1;
@@ -377,7 +377,8 @@ void bench_csv_write_str(FILE *fp, const char *value) {
   if (!value) {
     return;
   }
-  /* Quote the value if it contains a comma or quote, escaping embedded quotes. */
+  /* Quote the value if it contains a comma or quote, escaping embedded quotes.
+   */
   int needs_quote = 0;
   for (const char *p = value; *p; p++) {
     if (*p == ',' || *p == '"' || *p == '\n') {

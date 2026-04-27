@@ -38,8 +38,8 @@ double get_time_seconds(void);
 #define BENCH_MAX_DEVICES KV_MAX_DEVICES
 
 typedef struct {
-  char *raw;                              /* owned, NUL-separated */
-  const char *paths[BENCH_MAX_DEVICES];   /* points into raw */
+  char *raw;                            /* owned, NUL-separated */
+  const char *paths[BENCH_MAX_DEVICES]; /* points into raw */
   uint32_t count;
 } bench_device_list_t;
 
@@ -99,14 +99,14 @@ const char *bench_kv_result_string(kv_result_t result);
 #define BENCH_LATVEC_DEFAULT_HARD_CAP (2u * 1024u * 1024u)
 
 typedef struct {
-  uint64_t *samples;     /* nanoseconds */
-  size_t count;          /* samples retained */
-  size_t cap;            /* allocated capacity */
-  size_t hard_cap;       /* maximum retained samples (reservoir threshold) */
-  uint64_t observed;     /* total samples observed (incl. dropped) */
-  uint64_t max_ns;       /* maximum latency seen */
-  uint64_t total_ns;     /* sum of observed latencies */
-  uint32_t rng_state;    /* xorshift state for reservoir replacement */
+  uint64_t *samples;  /* nanoseconds */
+  size_t count;       /* samples retained */
+  size_t cap;         /* allocated capacity */
+  size_t hard_cap;    /* maximum retained samples (reservoir threshold) */
+  uint64_t observed;  /* total samples observed (incl. dropped) */
+  uint64_t max_ns;    /* maximum latency seen */
+  uint64_t total_ns;  /* sum of observed latencies */
+  uint32_t rng_state; /* xorshift state for reservoir replacement */
 } bench_latvec_t;
 
 void bench_latvec_init(bench_latvec_t *lv, size_t hard_cap, uint32_t seed);
