@@ -331,6 +331,14 @@ uint32_t kv_engine_healthy_device_count(kv_engine_t *engine);
  * existing key mappings when N changes, then migrate existing keys to their
  * new locations.
  *
+ * @warning Not thread-safe. Call only from a single setup thread, before any
+ *          concurrent kv_engine_store/retrieve/delete calls are issued. The
+ *          internal write_ops==0 check is a best-effort misuse guard, not a
+ *          synchronization barrier: a writer racing with this call may slip
+ *          past the guard, and concurrent shard lookups may observe the
+ *          num_devices increment before the new device slot is fully
+ *          initialized. Treat this function as init-time configuration.
+ *
  * @param engine      Engine handle
  * @param device_path Path to the new NVMe KV device (e.g. "/dev/kvemul4")
  * @return KV_SUCCESS on success

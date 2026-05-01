@@ -29,7 +29,7 @@ static void *health_probe_thread(void *arg) {
     /* sleep for probe_interval_sec, but wake immediately if destroy() signals
      */
     struct timespec deadline;
-    clock_gettime(CLOCK_REALTIME, &deadline);
+    clock_gettime(CLOCK_MONOTONIC, &deadline);
     deadline.tv_sec += probe->probe_interval_sec;
 
     pthread_mutex_lock(&probe->mutex);
@@ -82,7 +82,15 @@ health_probe_t *health_probe_create(kv_engine_t *engine) {
   atomic_store(&probe->running, true);
 
   pthread_mutex_init(&probe->mutex, NULL);
-  pthread_cond_init(&probe->cond, NULL);
+
+  /* Use CLOCK_MONOTONIC so the timed wait is immune to wall-clock jumps
+   * (NTP step, manual date change). Must match the clock_gettime() call in
+   * health_probe_thread(). */
+  pthread_condattr_t cattr;
+  pthread_condattr_init(&cattr);
+  pthread_condattr_setclock(&cattr, CLOCK_MONOTONIC);
+  pthread_cond_init(&probe->cond, &cattr);
+  pthread_condattr_destroy(&cattr);
 
   if (pthread_create(&probe->thread, NULL, health_probe_thread, probe) != 0) {
     pthread_mutex_destroy(&probe->mutex);
