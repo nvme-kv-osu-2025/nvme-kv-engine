@@ -46,7 +46,13 @@ typedef enum {
   KV_ERR_TIMEOUT = -7,
   KV_ERR_IO = -8,
   KV_ERR_NOT_INITIALIZED = -9,
-  KV_ERR_KEY_ALREADY_EXISTS = -10
+  KV_ERR_KEY_ALREADY_EXISTS = -10,
+  KV_ERR_DEVICE_FULL = -11,
+  KV_ERR_DEVICE_NOT_FOUND = -12,
+  KV_ERR_KEY_LENGTH = -13,
+  KV_ERR_VALUE_LENGTH = -14,
+  KV_ERR_DEVICE_DEGRADED = -15,
+  KV_ERR_ALL_DEVICES_FAILED = -16
 } kv_result_t;
 
 /**
@@ -104,6 +110,27 @@ typedef struct {
   uint64_t bytes_written; /**< Total bytes written */
   uint64_t bytes_read;    /**< Total bytes read */
 } kv_engine_stats_t;
+
+/**
+ * Per-device health snapshot (for multi-device mode)
+ *
+ * Populated by kv_engine_get_device_health(). Reflects the state of one
+ * physical device at the moment of the call.
+ */
+typedef struct {
+  uint32_t device_index; /**< Index into the engine's device array */
+  bool healthy; /**< false once consecutive_errors exceeds threshold, or on
+                   unplug */
+  uint64_t capacity_bytes;  /**< Total raw capacity reported by device */
+  uint32_t utilization_pct; /**< 0-10000 (divide by 100 for percent; e.g. 4250
+                               = 42.50%) */
+  uint64_t consecutive_errors; /**< Device-level errors since last success;
+                                  resets to 0 on success */
+  uint64_t total_errors; /**< Cumulative device-level error count since engine
+                            init */
+  uint64_t total_ops;    /**< Cumulative operations attempted on this device */
+  char device_path[256]; /**< Null-terminated path (e.g. "/dev/kvemul0") */
+} kv_device_health_t;
 
 /* ============================================================================
  * Lifecycle Management
@@ -259,6 +286,66 @@ kv_result_t kv_engine_get_stats(kv_engine_t *engine, kv_engine_stats_t *stats);
  * @param engine Engine handle
  */
 void kv_engine_reset_stats(kv_engine_t *engine);
+
+/* ============================================================================
+ * Health Monitoring
+ * ============================================================================
+ */
+
+/**
+ * Get a health snapshot for a single device
+ *
+ * Reads capacity and utilization from the Samsung KVS API and copies the
+ * current atomic health counters into @p health.
+ *
+ * @param engine       Engine handle
+ * @param device_index Index of the device (0 to num_devices-1)
+ * @param health       Output struct to populate
+ * @return KV_SUCCESS, KV_ERR_INVALID_PARAM if device_index is out of range
+ */
+kv_result_t kv_engine_get_device_health(kv_engine_t *engine,
+                                        uint32_t device_index,
+                                        kv_device_health_t *health);
+
+/**
+ * Return the number of currently healthy devices
+ *
+ * Iterates the device array and counts entries where healthy == true.
+ * Returns 0 if the engine is NULL or uninitialized.
+ *
+ * @param engine Engine handle
+ * @return Count of healthy devices (0..num_devices)
+ */
+uint32_t kv_engine_healthy_device_count(kv_engine_t *engine);
+
+/**
+ * Add a device to the engine (hot-add)
+ *
+ * ONLY valid before any keys have been written (write_ops == 0).
+ * Changing the device count after writes corrupts hash-mod-N routing:
+ * hash(key) % (N+1) produces a different index for ~80% of existing keys,
+ * making that data appear missing.
+ *
+ * NOTE: if we wanted to support hot-add after writes, we would need to use a
+ * different hash sharding scheme (e.g. consistent hashing) that doesn't change
+ * existing key mappings when N changes, then migrate existing keys to their
+ * new locations.
+ *
+ * @warning Not thread-safe. Call only from a single setup thread, before any
+ *          concurrent kv_engine_store/retrieve/delete calls are issued. The
+ *          internal write_ops==0 check is a best-effort misuse guard, not a
+ *          synchronization barrier: a writer racing with this call may slip
+ *          past the guard, and concurrent shard lookups may observe the
+ *          num_devices increment before the new device slot is fully
+ *          initialized. Treat this function as init-time configuration.
+ *
+ * @param engine      Engine handle
+ * @param device_path Path to the new NVMe KV device (e.g. "/dev/kvemul4")
+ * @return KV_SUCCESS on success
+ *         KV_ERR_INVALID_PARAM if called after writes have started,
+ *           or if num_devices == KV_MAX_DEVICES
+ */
+kv_result_t kv_engine_add_device(kv_engine_t *engine, const char *device_path);
 
 /* ============================================================================
  * Buffer Management

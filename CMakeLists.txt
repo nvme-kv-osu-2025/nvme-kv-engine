@@ -9,6 +9,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(LIBRARY_SOURCES
     src/core/kv_engine.c
     src/core/kv_engine_multi_device.c
+    src/core/kv_engine_health.c
     src/utils/memory_pool.c
     src/utils/thread_pool.c
     src/utils/dma_alloc.c

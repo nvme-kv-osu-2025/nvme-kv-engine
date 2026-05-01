@@ -5,6 +5,7 @@
 #include "kv_engine.h"
 #include "../utils/dma_alloc.h"
 #include "kv_engine_internal.h"
+#include "kvs_result.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,14 +21,102 @@ static kv_result_t map_kvs_result(kvs_result kvs_res) {
     return KV_SUCCESS;
   case KVS_ERR_PARAM_INVALID:
     return KV_ERR_INVALID_PARAM;
-  case KVS_ERR_SYS_IO:
-    return KV_ERR_IO;
+  case KVS_ERR_OPTION_INVALID:
+    return KV_ERR_INVALID_PARAM;
+  case KVS_ERR_KEY_LENGTH_INVALID:
+    return KV_ERR_KEY_LENGTH;
+  case KVS_ERR_VALUE_LENGTH_INVALID:
+    return KV_ERR_VALUE_LENGTH;
+  case KVS_ERR_VALUE_OFFSET_INVALID:
+    return KV_ERR_VALUE_LENGTH;
+  case KVS_ERR_VALUE_OFFSET_MISALIGNED:
+    return KV_ERR_VALUE_LENGTH;
   case KVS_ERR_KEY_NOT_EXIST:
     return KV_ERR_KEY_NOT_FOUND;
   case KVS_ERR_VALUE_UPDATE_NOT_ALLOWED:
     return KV_ERR_KEY_ALREADY_EXISTS;
+  case KVS_ERR_DEV_CAPAPCITY:
+    return KV_ERR_DEVICE_FULL;
+  case KVS_ERR_KS_CAPACITY:
+    return KV_ERR_DEVICE_FULL;
+  case KVS_ERR_DEV_NOT_EXIST:
+    return KV_ERR_DEVICE_NOT_FOUND;
+  case KVS_ERR_DEV_NOT_OPENED:
+    return KV_ERR_DEVICE_NOT_FOUND;
+  case KVS_ERR_SYS_IO:
+    return KV_ERR_IO;
+  case KVS_ERR_BUFFER_SMALL:
+    return KV_ERR_IO;
+  case KVS_ERR_KS_NOT_EXIST:
+    return KV_ERR_IO;
+  case KVS_ERR_KS_NOT_OPEN:
+    return KV_ERR_IO;
+  case KVS_ERR_KS_EXIST:
+    return KV_ERR_IO;
+  case KVS_ERR_KS_INDEX:
+    return KV_ERR_IO;
+  case KVS_ERR_KS_NAME:
+    return KV_ERR_IO;
+  case KVS_ERR_KS_OPEN:
+    return KV_ERR_IO;
+  case KVS_ERR_ITERATOR_FILTER_INVALID:
+    return KV_ERR_IO;
+  case KVS_ERR_ITERATOR_MAX:
+    return KV_ERR_IO;
+  case KVS_ERR_ITERATOR_NOT_EXIST:
+    return KV_ERR_IO;
+  case KVS_ERR_ITERATOR_OPEN:
+    return KV_ERR_IO;
   default:
     return KV_ERR_IO;
+  }
+}
+
+/* Returns true if kvs_res indicates a hardware/device-level fault rather
+ * than an application-level error (e.g. key not found, duplicate key).
+ * Only device errors count toward the health degradation threshold. */
+static bool is_device_error(kvs_result kvs_res) {
+  switch (kvs_res) {
+  case KVS_ERR_SYS_IO:
+  case KVS_ERR_DEV_NOT_EXIST:
+  case KVS_ERR_DEV_NOT_OPENED:
+  case KVS_ERR_DEV_CAPAPCITY:
+  case KVS_ERR_KS_CAPACITY:
+    return true;
+  default:
+    return false;
+  }
+}
+
+/* Returns KV_ERR_DEVICE_DEGRADED if the device has been marked unhealthy,
+ * KV_SUCCESS otherwise. Called at the top of each sync operation to fail
+ * fast before attempting a Samsung API call on a known-bad device. */
+static kv_result_t check_device_health(kv_device_ctx_t *ctx) {
+  if (!atomic_load(&ctx->healthy)) {
+    return KV_ERR_DEVICE_DEGRADED;
+  }
+  return KV_SUCCESS;
+}
+
+/* Records the outcome of a Samsung API call against a device's health
+ * counters. Device-level errors increment consecutive_errors and may mark
+ * the device unhealthy. Application-level errors reset consecutive_errors
+ * since a valid response proves the device is alive. */
+static void device_record_result(kv_device_ctx_t *ctx, kvs_result kvs_res) {
+  atomic_fetch_add(&ctx->total_ops, 1);
+
+  if (is_device_error(kvs_res)) {
+    atomic_fetch_add(&ctx->total_errors, 1);
+    atomic_fetch_add(&ctx->consecutive_errors, 1);
+    if (kvs_res == KVS_ERR_DEV_NOT_EXIST || kvs_res == KVS_ERR_DEV_NOT_OPENED) {
+      atomic_store(&ctx->healthy, false);
+    } else if (atomic_load(&ctx->consecutive_errors) >=
+               ctx->max_consecutive_errors) {
+      atomic_store(&ctx->healthy, false);
+    }
+  } else {
+    atomic_store(&ctx->consecutive_errors, 0);
+    // TODO: restore healthy state with background probe in kv_engine_health.c
   }
 }
 
@@ -139,6 +228,9 @@ kv_result_t kv_engine_init(kv_engine_t **engine,
     return KV_ERR_NO_MEMORY;
   }
 
+  /* Start background health probe thread */
+  eng->health_probe = health_probe_create(eng);
+
   eng->initialized = 1;
   *engine = eng;
 
@@ -149,6 +241,9 @@ void kv_engine_cleanup(kv_engine_t *engine) {
   if (!engine) {
     return;
   }
+
+  /* Stop health probe thread before closing devices */
+  health_probe_destroy(engine->health_probe);
 
   /* Shutdown thread pool */
   if (engine->workers) {
@@ -206,6 +301,12 @@ kv_result_t kv_engine_store(kv_engine_t *engine, const void *key,
   uint32_t dev_idx = kv_engine_shard_for_key(key, key_len, engine->num_devices);
   kvs_key_space_handle keyspace = engine->devices[dev_idx].keyspace;
 
+  /* Refuse operation if device is unhealthy */
+  kv_result_t health = check_device_health(&engine->devices[dev_idx]);
+  if (health != KV_SUCCESS) {
+    return health;
+  }
+
   /* Prepare Samsung KV structures */
   kvs_key kv_key;
   kv_key.key = (void *)key;
@@ -240,6 +341,7 @@ kv_result_t kv_engine_store(kv_engine_t *engine, const void *key,
   kvs_option_store option;
   option.st_type = overwrite ? KVS_STORE_POST : KVS_STORE_NOOVERWRITE;
   kvs_result kvs_res = kvs_store_kvp(keyspace, &kv_key, &kv_value, &option);
+  device_record_result(&engine->devices[dev_idx], kvs_res);
 
   if (aligned_buf) {
     dma_free(aligned_buf);
@@ -264,6 +366,12 @@ kv_result_t kv_engine_retrieve(kv_engine_t *engine, const void *key,
   /* Shard key to a device */
   uint32_t dev_idx = kv_engine_shard_for_key(key, key_len, engine->num_devices);
   kvs_key_space_handle keyspace = engine->devices[dev_idx].keyspace;
+
+  /* Refuse operation if device is unhealthy */
+  kv_result_t health = check_device_health(&engine->devices[dev_idx]);
+  if (health != KV_SUCCESS) {
+    return health;
+  }
 
   /* Prepare key */
   kvs_key kv_key;
@@ -315,6 +423,8 @@ kv_result_t kv_engine_retrieve(kv_engine_t *engine, const void *key,
     kvs_res = kvs_retrieve_kvp(keyspace, &kv_key, &option, &kv_value);
   }
 
+  device_record_result(&engine->devices[dev_idx], kvs_res);
+
   if (delete_value && kvs_res == KVS_SUCCESS) {
     pthread_mutex_lock(&engine->hash_lock);
     delete_key(&engine->key_table, key, key_len);
@@ -352,6 +462,12 @@ kv_result_t kv_engine_delete(kv_engine_t *engine, const void *key,
   uint32_t dev_idx = kv_engine_shard_for_key(key, key_len, engine->num_devices);
   kvs_key_space_handle keyspace = engine->devices[dev_idx].keyspace;
 
+  /* Refuse operation if device is unhealthy */
+  kv_result_t health = check_device_health(&engine->devices[dev_idx]);
+  if (health != KV_SUCCESS) {
+    return health;
+  }
+
   kvs_key kv_key;
   kv_key.key = (void *)key;
   kv_key.length = key_len;
@@ -359,6 +475,8 @@ kv_result_t kv_engine_delete(kv_engine_t *engine, const void *key,
   kvs_option_delete option;
   option.kvs_delete_error = false;
   kvs_result kvs_res = kvs_delete_kvp(keyspace, &kv_key, &option);
+
+  device_record_result(&engine->devices[dev_idx], kvs_res);
 
   pthread_mutex_lock(&engine->hash_lock);
   delete_key(&engine->key_table, key, key_len);
@@ -383,6 +501,12 @@ kv_result_t kv_engine_exists(kv_engine_t *engine, const void *key,
   uint32_t dev_idx = kv_engine_shard_for_key(key, key_len, engine->num_devices);
   kvs_key_space_handle keyspace = engine->devices[dev_idx].keyspace;
 
+  /* Refuse operation if device is unhealthy */
+  kv_result_t health = check_device_health(&engine->devices[dev_idx]);
+  if (health != KV_SUCCESS) {
+    return health;
+  }
+
   pthread_mutex_lock(&engine->hash_lock);
   uint8_t hash_value_check = key_in_table(&engine->key_table, key, key_len);
   pthread_mutex_unlock(&engine->hash_lock);
@@ -399,6 +523,8 @@ kv_result_t kv_engine_exists(kv_engine_t *engine, const void *key,
   exist_list.result_buffer = &result_buffer;
 
   kvs_result kvs_res = kvs_exist_kv_pairs(keyspace, 1, &kv_key, &exist_list);
+
+  device_record_result(&engine->devices[dev_idx], kvs_res);
 
   if (kvs_res != KVS_SUCCESS) {
     return map_kvs_result(kvs_res);

@@ -11,6 +11,7 @@
 #include "kv_engine.h"
 #include <kvs_api.h>
 #include <pthread.h>
+#include <stdatomic.h>
 
 #define KV_ENGINE_RETRIEVE_SIZE 2 * 1024 * 1024 /* 2MB */
 
@@ -91,7 +92,34 @@ typedef struct {
   kvs_device_handle device;
   kvs_key_space_handle keyspace;
   char *device_path; /* owned copy for cleanup */
+
+  /* Health tracking (updated atomically on every operation)
+   *
+   * Using _Atomic instead of a mutex because these fields will be
+   * individually updated on every op and don't require multi-field
+   * consistency. */
+  _Atomic bool healthy;
+  _Atomic uint64_t consecutive_errors; /* resets to 0 on success */
+  _Atomic uint64_t total_errors;
+  _Atomic uint64_t total_ops;
+  uint32_t
+      max_consecutive_errors; /* threshold for marking unhealthy; default 10 */
 } kv_device_ctx_t;
+
+/**
+ * Background health probe - periodically retries unhealthy devices and
+ * re-marks them healthy after consecutive successful probes.
+ */
+typedef struct {
+  pthread_t thread;
+  _Atomic bool running;
+  pthread_cond_t cond; /* signalled by destroy() to wake the thread early */
+  pthread_mutex_t mutex;
+  uint32_t probe_interval_sec; /* seconds between probe sweeps; default 5 */
+  uint32_t recovery_threshold; /* consecutive successes before re-marking;
+                                  default 3 */
+  kv_engine_t *engine;         /* back-pointer to iterate devices */
+} health_probe_t;
 
 /**
  * Main engine structure (opaque in public API)
@@ -123,6 +151,9 @@ struct kv_engine {
 
   /* State */
   int initialized;
+
+  /* Background health probe */
+  health_probe_t *health_probe;
 };
 
 /* ============================================================================
@@ -155,5 +186,9 @@ uint32_t kv_engine_shard_for_key(const void *key, size_t key_len,
 kv_result_t kv_engine_open_device(kv_device_ctx_t *ctx, const char *path,
                                   uint32_t dev_index);
 void kv_engine_close_device(kv_device_ctx_t *ctx);
+
+/* Health probe lifecycle */
+health_probe_t *health_probe_create(kv_engine_t *engine);
+void health_probe_destroy(health_probe_t *probe);
 
 #endif /* KV_ENGINE_INTERNAL_H */
