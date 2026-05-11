@@ -80,6 +80,14 @@ kv_result_t kv_engine_open_device(kv_device_ctx_t *ctx, const char *path,
   }
 
   ctx->device_path = strdup(path);
+
+  /* Initialize health tracking fields */
+  atomic_store(&ctx->healthy, true);
+  atomic_store(&ctx->consecutive_errors, 0);
+  atomic_store(&ctx->total_errors, 0);
+  atomic_store(&ctx->total_ops, 0);
+  ctx->max_consecutive_errors = 10;
+
   return KV_SUCCESS;
 }
 
