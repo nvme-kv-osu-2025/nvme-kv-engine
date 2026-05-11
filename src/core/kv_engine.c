@@ -236,9 +236,8 @@ kv_result_t kv_engine_init(kv_engine_t **engine,
    * device errors still set the unhealthy flag, they just won't auto-clear. */
   eng->health_probe = health_probe_create(eng);
   if (!eng->health_probe) {
-    fprintf(stderr,
-            "[kv_engine] warning: health probe thread failed to start; "
-            "automatic device recovery is disabled\n");
+    fprintf(stderr, "[kv_engine] warning: health probe thread failed to start; "
+                    "automatic device recovery is disabled\n");
   }
 
   eng->initialized = 1;

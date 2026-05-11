@@ -152,7 +152,8 @@ kv_result_t kv_engine_get_device_health(kv_engine_t *engine,
   /* Query live capacity and utilization from the device. Failures leave
    * the corresponding field at 0 (from the memset above); log so the caller
    * can distinguish a real zero from a query failure. */
-  kvs_result cap_res = kvs_get_device_capacity(dev->device, &health->capacity_bytes);
+  kvs_result cap_res =
+      kvs_get_device_capacity(dev->device, &health->capacity_bytes);
   if (cap_res != KVS_SUCCESS) {
     fprintf(stderr,
             "[health] kvs_get_device_capacity failed for device %u: 0x%x\n",
@@ -223,6 +224,7 @@ kv_result_t kv_engine_add_device(kv_engine_t *engine, const char *device_path) {
 
   /* Publish the new device only after kv_engine_open_device has fully
    * initialized the slot. Release pairs with the probe's acquire load. */
-  atomic_store_explicit(&engine->num_devices, current + 1, memory_order_release);
+  atomic_store_explicit(&engine->num_devices, current + 1,
+                        memory_order_release);
   return KV_SUCCESS;
 }
