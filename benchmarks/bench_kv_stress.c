@@ -26,7 +26,9 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <pthread.h>
+#include <semaphore.h>
 #include <stdarg.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -110,6 +112,8 @@ typedef struct {
   uint32_t worker_threads;
   size_t memory_pool_bytes;
   uint32_t dma_pool_count;
+  int async_mode;       /* 1 = use kv_engine_*_async APIs */
+  uint32_t in_flight;   /* max outstanding submissions per worker thread */
   const char *csv_path;
   const char *summary_path;
 } cfg_t;
@@ -133,6 +137,8 @@ static void cfg_set_defaults(cfg_t *c) {
   c->worker_threads = 0;
   c->memory_pool_bytes = (size_t)64 * 1024 * 1024;
   c->dma_pool_count = 16;
+  c->async_mode = 0;
+  c->in_flight = 32;
 }
 
 static void usage(const char *prog) {
@@ -157,6 +163,9 @@ static void usage(const char *prog) {
       "Engine knobs:\n"
       "  --queue-depth N --worker-threads N\n"
       "  --memory-pool-bytes N --dma-pool-count N\n\n"
+      "Async mode:\n"
+      "  --async                 submit via kv_engine_*_async with callbacks\n"
+      "  --in-flight N           max outstanding per thread (default 32)\n\n"
       "Output:\n"
       "  --csv PATH        append a CSV row\n"
       "  --summary PATH    append a human-readable summary block\n",
@@ -235,6 +244,13 @@ static int parse_args(int argc, char **argv, cfg_t *c) {
     } else if (!strcmp(a, "--dma-pool-count")) {
       ARG_NEXT();
       c->dma_pool_count = (uint32_t)atoi(argv[i]);
+    } else if (!strcmp(a, "--async")) {
+      c->async_mode = 1;
+    } else if (!strcmp(a, "--in-flight")) {
+      ARG_NEXT();
+      c->in_flight = (uint32_t)atoi(argv[i]);
+      if (c->in_flight < 1)
+        c->in_flight = 1;
     } else if (!strcmp(a, "--csv")) {
       ARG_NEXT();
       c->csv_path = argv[i];
@@ -349,11 +365,19 @@ typedef struct {
   double deadline_sec; /* when to stop (monotonic seconds) */
   uint64_t ops_budget; /* if non-zero, hard op cap for this thread */
 
-  /* Counters and latency capture */
+  /* Counters and latency capture.
+   * Sync mode: only the owning thread writes (no synchronization needed).
+   * Async mode: callbacks fire on engine worker threads; counters are
+   * incremented atomically and latvec writes are guarded by latvec_lock. */
   uint64_t ops_done;
   uint64_t ops_fail;
   uint64_t bytes_done;
   bench_latvec_t latencies;
+
+  /* Async-only state. Initialized when cfg->async_mode is set. */
+  sem_t async_slots;          /* counts available in-flight slots */
+  pthread_mutex_t latvec_lock;
+  atomic_uint_least32_t in_flight; /* current outstanding ops */
 
   uint32_t rng_seed;
 } worker_ctx_t;
@@ -410,6 +434,65 @@ static int do_exists(kv_engine_t *engine, char *kbuf, rng_t *rng,
   int exists = 0;
   kv_result_t res = kv_engine_exists(engine, kbuf, klen, &exists);
   return (res == KV_SUCCESS) ? 0 : -1;
+}
+
+/* -------------------------------------------------------------- */
+/* Async submission helpers                                       */
+/* -------------------------------------------------------------- */
+
+/* Heap-allocated per-op context attached to each async submission. The
+ * engine's worker thread fires the callback with this pointer as user_data;
+ * the callback records latency, updates counters, and frees the ctx. */
+typedef struct {
+  worker_ctx_t *w;
+  uint64_t submit_ns;
+  size_t value_len; /* for bytes_done bookkeeping on writes/reads */
+  int is_write;
+} async_op_ctx_t;
+
+/* Common bookkeeping for any completed async op. Always called from an
+ * engine worker thread. */
+static void async_record_completion(async_op_ctx_t *ctx, kv_result_t result) {
+  worker_ctx_t *w = ctx->w;
+  uint64_t lat = bench_time_ns() - ctx->submit_ns;
+
+  pthread_mutex_lock(&w->latvec_lock);
+  bench_latvec_record(&w->latencies, lat);
+  pthread_mutex_unlock(&w->latvec_lock);
+
+  if (result == KV_SUCCESS) {
+    __atomic_fetch_add(&w->ops_done, 1, __ATOMIC_RELAXED);
+    if (ctx->is_write && ctx->value_len > 0) {
+      __atomic_fetch_add(&w->bytes_done, ctx->value_len, __ATOMIC_RELAXED);
+    }
+  } else {
+    __atomic_fetch_add(&w->ops_fail, 1, __ATOMIC_RELAXED);
+  }
+
+  atomic_fetch_sub(&w->in_flight, 1);
+  sem_post(&w->async_slots);
+  free(ctx);
+}
+
+static void async_store_cb(kv_result_t result, void *user_data) {
+  async_record_completion((async_op_ctx_t *)user_data, result);
+}
+
+static void async_delete_cb(kv_result_t result, void *user_data) {
+  async_record_completion((async_op_ctx_t *)user_data, result);
+}
+
+static void async_retrieve_cb(kv_result_t result, void *value, size_t value_len,
+                              void *user_data) {
+  async_op_ctx_t *ctx = (async_op_ctx_t *)user_data;
+  if (result == KV_SUCCESS) {
+    ctx->value_len = value_len;
+    /* engine allocated the value buffer; release it. */
+    kv_engine_free_buffer(ctx->w->engine, value);
+  }
+  /* Treat reads as non-write byte traffic (bytes_done counts data delivered). */
+  ctx->is_write = 1;
+  async_record_completion(ctx, result);
 }
 
 /* -------------------------------------------------------------- */
@@ -489,6 +572,116 @@ static void *worker_entry(void *arg) {
       w->ops_fail++;
     }
     local_done++;
+  }
+
+  free(kbuf);
+  free(vbuf);
+  return NULL;
+}
+
+/* Async worker. Holds a semaphore-bounded number of in-flight submissions
+ * and lets the engine's internal thread pool execute the actual I/O. */
+static void *worker_entry_async(void *arg) {
+  worker_ctx_t *w = (worker_ctx_t *)arg;
+  const cfg_t *cfg = w->cfg;
+
+  /* Persistent scratch buffers used to populate each submission's key/value.
+   * The engine copies into its own async context (see src/async/async_ops.c),
+   * so we can reuse these between submissions without ownership issues. */
+  char *kbuf = (char *)malloc(cfg->key_max + 1);
+  size_t vbuf_size = cfg->value_max > 0 ? cfg->value_max : 1;
+  char *vbuf = (char *)malloc(vbuf_size);
+  if (!kbuf || !vbuf) {
+    fprintf(stderr, "[worker %u] OOM allocating buffers\n", w->thread_id);
+    free(kbuf);
+    free(vbuf);
+    return NULL;
+  }
+
+  rng_t rng;
+  rng_seed(&rng, ((uint64_t)w->rng_seed << 32) ^ (uint64_t)(w->thread_id + 1));
+
+  double end = w->deadline_sec;
+  uint64_t local_submitted = 0;
+  uint64_t budget = w->ops_budget;
+
+  for (;;) {
+    if (budget && local_submitted >= budget)
+      break;
+    if (now_seconds() >= end)
+      break;
+
+    /* Backpressure: wait until a slot is free. */
+    if (sem_wait(&w->async_slots) != 0) {
+      if (errno == EINTR)
+        continue;
+      break;
+    }
+
+    uint64_t key_idx;
+    workload_t op = cfg->workload;
+    if (cfg->workload == WL_MIXED) {
+      uint32_t roll = (uint32_t)(rng_next(&rng) % 100);
+      op = (roll < (uint32_t)cfg->read_percent) ? WL_READ : WL_WRITE;
+    }
+    if (op == WL_WRITE) {
+      key_idx = (uint64_t)w->thread_id * (1ULL << 40) + local_submitted;
+    } else {
+      key_idx = w->key_offset + (rng_next(&rng) % w->key_count);
+    }
+
+    uint32_t klen = rng_range(&rng, cfg->key_min, cfg->key_max);
+    uint32_t vlen = rng_range(&rng, cfg->value_min, cfg->value_max);
+    gen_key(kbuf, klen, key_idx);
+
+    async_op_ctx_t *ctx = (async_op_ctx_t *)malloc(sizeof(*ctx));
+    if (!ctx) {
+      sem_post(&w->async_slots);
+      __atomic_fetch_add(&w->ops_fail, 1, __ATOMIC_RELAXED);
+      local_submitted++;
+      continue;
+    }
+    ctx->w = w;
+    ctx->submit_ns = bench_time_ns();
+    ctx->value_len = vlen;
+    ctx->is_write = (op == WL_WRITE);
+
+    atomic_fetch_add(&w->in_flight, 1);
+
+    kv_result_t submit_rc = KV_ERR_INVALID_PARAM;
+    switch (op) {
+    case WL_WRITE:
+      fill_value(vbuf, vlen, key_idx);
+      submit_rc = kv_engine_store_async(w->engine, kbuf, klen, vbuf, vlen,
+                                        async_store_cb, ctx, true);
+      break;
+    case WL_READ:
+      submit_rc = kv_engine_retrieve_async(w->engine, kbuf, klen,
+                                           async_retrieve_cb, ctx);
+      break;
+    case WL_DELETE:
+      submit_rc = kv_engine_delete_async(w->engine, kbuf, klen, async_delete_cb,
+                                         ctx);
+      break;
+    default:
+      submit_rc = KV_ERR_INVALID_PARAM;
+      break;
+    }
+    if (submit_rc != KV_SUCCESS) {
+      /* Submission rejected outright — no callback will fire; account here. */
+      atomic_fetch_sub(&w->in_flight, 1);
+      sem_post(&w->async_slots);
+      __atomic_fetch_add(&w->ops_fail, 1, __ATOMIC_RELAXED);
+      free(ctx);
+    }
+    local_submitted++;
+  }
+
+  /* Drain: wait for outstanding callbacks to fire before tearing buffers down.
+   * Callbacks decrement in_flight and post slots, so we can spin on either. */
+  while (atomic_load(&w->in_flight) > 0) {
+    struct timespec ts = {0, 1 * 1000 * 1000}; /* 1 ms */
+    nanosleep(&ts, NULL);
   }
 
   free(kbuf);
@@ -953,6 +1146,15 @@ int main(int argc, char **argv) {
   fprintf(stderr, "[stress] %s: workload=%s devices=%u threads=%u\n", cfg.label,
           workload_name(cfg.workload), devices.count, cfg.threads);
 
+  /* Async submission relies on the engine's internal worker pool. Default
+   * worker_threads to a sensible non-zero value if the caller forgot. */
+  if (cfg.async_mode && cfg.worker_threads == 0) {
+    cfg.worker_threads = 16;
+    fprintf(stderr,
+            "[stress] --async requires worker threads; defaulting to %u\n",
+            cfg.worker_threads);
+  }
+
   bench_engine_opts_t opts = {0};
   opts.memory_pool_bytes = cfg.memory_pool_bytes;
   opts.queue_depth = cfg.queue_depth;
@@ -1079,15 +1281,34 @@ int main(int argc, char **argv) {
     }
     bench_latvec_init(&workers[i].latencies, BENCH_LATVEC_DEFAULT_HARD_CAP,
                       workers[i].rng_seed);
-    int rc = pthread_create(&tids[i], NULL, worker_entry, &workers[i]);
+    if (cfg.async_mode) {
+      pthread_mutex_init(&workers[i].latvec_lock, NULL);
+      atomic_store(&workers[i].in_flight, 0);
+      if (sem_init(&workers[i].async_slots, 0, cfg.in_flight) != 0) {
+        fprintf(stderr, "[stress] sem_init failed: %s\n", strerror(errno));
+        cfg.threads = i;
+        break;
+      }
+    }
+    void *(*entry)(void *) =
+        cfg.async_mode ? worker_entry_async : worker_entry;
+    int rc = pthread_create(&tids[i], NULL, entry, &workers[i]);
     if (rc != 0) {
       fprintf(stderr, "[stress] pthread_create failed: %s\n", strerror(rc));
+      if (cfg.async_mode) {
+        sem_destroy(&workers[i].async_slots);
+        pthread_mutex_destroy(&workers[i].latvec_lock);
+      }
       cfg.threads = i;
       break;
     }
   }
   for (uint32_t i = 0; i < cfg.threads; i++) {
     pthread_join(tids[i], NULL);
+    if (cfg.async_mode) {
+      sem_destroy(&workers[i].async_slots);
+      pthread_mutex_destroy(&workers[i].latvec_lock);
+    }
   }
   double t_done = now_seconds();
   getrusage(RUSAGE_SELF, &ru_after);

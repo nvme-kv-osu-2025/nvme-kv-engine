@@ -256,6 +256,50 @@ run_kv_stress multi_read \
   --value-min "$PREPOPULATE_VALUE" --value-max "$PREPOPULATE_VALUE" \
   --keyspace "$KEYSPACE"
 
+echo "==> KV engine async stress (single device)"
+run_kv_stress single_write_4k_async \
+  --workload write --devices "$DEVICE_0" --async --in-flight 32 \
+  --threads "$SINGLE_THREADS" --duration-sec "$SINGLE_DURATION" --warmup-sec 1 \
+  --key-min 16 --key-max 16 \
+  --value-min "$PREPOPULATE_VALUE" --value-max "$PREPOPULATE_VALUE" \
+  --keyspace "$KEYSPACE"
+
+run_kv_stress single_read_4k_async \
+  --workload read --devices "$DEVICE_0" --async --in-flight 32 \
+  --threads "$SINGLE_THREADS" --duration-sec "$SINGLE_DURATION" --warmup-sec 1 \
+  --key-min 16 --key-max 16 \
+  --value-min "$PREPOPULATE_VALUE" --value-max "$PREPOPULATE_VALUE" \
+  --keyspace "$KEYSPACE"
+
+run_kv_stress single_mixed_70r_4k_async \
+  --workload mixed --read-percent 70 --devices "$DEVICE_0" --async --in-flight 32 \
+  --threads "$SINGLE_THREADS" --duration-sec "$SINGLE_DURATION" --warmup-sec 1 \
+  --key-min 16 --key-max 16 \
+  --value-min "$PREPOPULATE_VALUE" --value-max "$PREPOPULATE_VALUE" \
+  --keyspace "$KEYSPACE"
+
+echo "==> KV engine async stress (multi device, 4-way sharded)"
+run_kv_stress multi_write_async \
+  --workload write --devices "$DEVICES_4" --async --in-flight 32 \
+  --threads "$MULTI_THREADS" --duration-sec "$MULTI_DURATION" --warmup-sec 1 \
+  --key-min 16 --key-max 16 \
+  --value-min "$PREPOPULATE_VALUE" --value-max "$PREPOPULATE_VALUE" \
+  --keyspace "$KEYSPACE"
+
+run_kv_stress multi_mixed_70r_4k_async \
+  --workload mixed --read-percent 70 --devices "$DEVICES_4" --async --in-flight 32 \
+  --threads "$MULTI_THREADS" --duration-sec "$MULTI_DURATION" --warmup-sec 1 \
+  --key-min 16 --key-max 16 \
+  --value-min "$PREPOPULATE_VALUE" --value-max "$PREPOPULATE_VALUE" \
+  --keyspace "$KEYSPACE"
+
+run_kv_stress multi_read_async \
+  --workload read --devices "$DEVICES_4" --async --in-flight 32 \
+  --threads "$MULTI_THREADS" --duration-sec "$MULTI_DURATION" --warmup-sec 1 \
+  --key-min 16 --key-max 16 \
+  --value-min "$PREPOPULATE_VALUE" --value-max "$PREPOPULATE_VALUE" \
+  --keyspace "$KEYSPACE"
+
 echo "==> Capacity sweep"
 run_kv_capacity capacity_single \
   --devices "$DEVICE_0" \
