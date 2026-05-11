@@ -29,6 +29,27 @@ def _try_load_json(path: Path) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _try_load_fio_json(path: Path) -> Optional[Dict[str, Any]]:
+    """Load a FIO JSON output file, tolerating non-JSON prefix lines.
+
+    FIO occasionally leaks helper-thread error lines (e.g.
+    "fio: select() call in helper thread failed: Interrupted system call")
+    into the JSON output file when running under containerized signal
+    delivery. Strip anything before the first '{' so the rest parses.
+    """
+    if not path.exists():
+        return None
+    try:
+        text = path.read_text()
+        start = text.find("{")
+        if start < 0:
+            raise ValueError("no JSON object found")
+        return json.loads(text[start:])
+    except Exception as exc:
+        print(f"[summary] failed to parse {path}: {exc}", file=sys.stderr)
+        return None
+
+
 def _read_csv(path: Path) -> List[Dict[str, str]]:
     if not path.exists():
         return []
@@ -219,7 +240,7 @@ def _fio_section(fio_dir: Path) -> List[str]:
         return ["_No FIO JSON results captured._"]
     lines = []
     for path in jsons:
-        data = _try_load_json(path)
+        data = _try_load_fio_json(path)
         if not data:
             continue
         lines.append(f"### `{path.name}`")
