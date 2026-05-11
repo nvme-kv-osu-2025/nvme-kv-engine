@@ -107,11 +107,14 @@ static void device_record_result(kv_device_ctx_t *ctx, kvs_result kvs_res) {
 
   if (is_device_error(kvs_res)) {
     atomic_fetch_add(&ctx->total_errors, 1);
-    atomic_fetch_add(&ctx->consecutive_errors, 1);
+    /* Use the fetch_add return value rather than a separate atomic_load:
+     * the probe thread may reset consecutive_errors between the add and a
+     * second load, hiding the fact that *this* op just crossed the
+     * threshold and causing the failure to be silently dropped. */
+    uint64_t prev = atomic_fetch_add(&ctx->consecutive_errors, 1);
     if (kvs_res == KVS_ERR_DEV_NOT_EXIST || kvs_res == KVS_ERR_DEV_NOT_OPENED) {
       atomic_store(&ctx->healthy, false);
-    } else if (atomic_load(&ctx->consecutive_errors) >=
-               ctx->max_consecutive_errors) {
+    } else if ((prev + 1) >= ctx->max_consecutive_errors) {
       atomic_store(&ctx->healthy, false);
     }
   } else {
@@ -228,8 +231,15 @@ kv_result_t kv_engine_init(kv_engine_t **engine,
     return KV_ERR_NO_MEMORY;
   }
 
-  /* Start background health probe thread */
+  /* Start background health probe thread. Best-effort: a failure here means
+   * recovery monitoring is unavailable, but the engine remains usable —
+   * device errors still set the unhealthy flag, they just won't auto-clear. */
   eng->health_probe = health_probe_create(eng);
+  if (!eng->health_probe) {
+    fprintf(stderr,
+            "[kv_engine] warning: health probe thread failed to start; "
+            "automatic device recovery is disabled\n");
+  }
 
   eng->initialized = 1;
   *engine = eng;

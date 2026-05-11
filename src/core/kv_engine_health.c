@@ -9,6 +9,7 @@
 
 #include "kv_engine_internal.h"
 #include <kvs_api.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -148,9 +149,22 @@ kv_result_t kv_engine_get_device_health(kv_engine_t *engine,
              dev->device_path);
   }
 
-  /* Query live capacity and utilization from the device */
-  kvs_get_device_capacity(dev->device, &health->capacity_bytes);
-  kvs_get_device_utilization(dev->device, &health->utilization_pct);
+  /* Query live capacity and utilization from the device. Failures leave
+   * the corresponding field at 0 (from the memset above); log so the caller
+   * can distinguish a real zero from a query failure. */
+  kvs_result cap_res = kvs_get_device_capacity(dev->device, &health->capacity_bytes);
+  if (cap_res != KVS_SUCCESS) {
+    fprintf(stderr,
+            "[health] kvs_get_device_capacity failed for device %u: 0x%x\n",
+            device_index, cap_res);
+  }
+  kvs_result util_res =
+      kvs_get_device_utilization(dev->device, &health->utilization_pct);
+  if (util_res != KVS_SUCCESS) {
+    fprintf(stderr,
+            "[health] kvs_get_device_utilization failed for device %u: 0x%x\n",
+            device_index, util_res);
+  }
 
   return KV_SUCCESS;
 }
@@ -169,18 +183,30 @@ uint32_t kv_engine_healthy_device_count(kv_engine_t *engine) {
   return count;
 }
 
+/* Contract: kv_engine_add_device is intended for init-time configuration
+ * (after kv_engine_init returns, but before the first store/retrieve/delete/
+ * exists call). The background health probe is running concurrently, so we
+ * use atomic operations to publish the new device safely:
+ *   1. kv_engine_open_device fully initializes devices[new_idx].
+ *   2. atomic_store_explicit(..., release) publishes the new count.
+ *   3. Probe / shard_for_key reads use the matching acquire load (or plain
+ *      reads on _Atomic types, which the compiler treats as seq_cst).
+ *
+ * The write_ops guard rejects calls after any writes have completed; note
+ * it is best-effort (TOCTOU window between releasing stats_lock and the
+ * count store). Hot-add of a device into a running, hashed shard set would
+ * also reroute ~(N-1)/N of existing keys and is therefore not supported. */
 kv_result_t kv_engine_add_device(kv_engine_t *engine, const char *device_path) {
   if (!engine || !engine->initialized || !device_path) {
     return KV_ERR_INVALID_PARAM;
   }
 
-  if (engine->num_devices >= KV_MAX_DEVICES) {
+  uint32_t current =
+      atomic_load_explicit(&engine->num_devices, memory_order_acquire);
+  if (current >= KV_MAX_DEVICES) {
     return KV_ERR_INVALID_PARAM;
   }
 
-  /* reject hot-add after any writes
-   * sharding is hash-mod-N, changing N would
-   * reroute ~(N-1)/N of existing keys to wrong devices */
   pthread_mutex_lock(&engine->stats_lock);
   uint64_t writes = engine->stats.write_ops;
   pthread_mutex_unlock(&engine->stats_lock);
@@ -189,13 +215,14 @@ kv_result_t kv_engine_add_device(kv_engine_t *engine, const char *device_path) {
     return KV_ERR_INVALID_PARAM;
   }
 
-  uint32_t new_idx = engine->num_devices;
   kv_result_t res =
-      kv_engine_open_device(&engine->devices[new_idx], device_path, new_idx);
+      kv_engine_open_device(&engine->devices[current], device_path, current);
   if (res != KV_SUCCESS) {
     return res;
   }
 
-  engine->num_devices++;
+  /* Publish the new device only after kv_engine_open_device has fully
+   * initialized the slot. Release pairs with the probe's acquire load. */
+  atomic_store_explicit(&engine->num_devices, current + 1, memory_order_release);
   return KV_SUCCESS;
 }

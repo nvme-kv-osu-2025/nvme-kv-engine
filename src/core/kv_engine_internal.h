@@ -127,7 +127,11 @@ typedef struct {
 struct kv_engine {
   /* Device array — one entry per SSD */
   kv_device_ctx_t devices[KV_MAX_DEVICES];
-  uint32_t num_devices;
+  /* num_devices is atomic to allow kv_engine_add_device to publish a new
+   * device while the background health probe is iterating. Writers must
+   * fully initialize devices[new_idx] before storing the new count with
+   * release ordering; readers must use acquire ordering. */
+  _Atomic uint32_t num_devices;
 
   /* Configuration */
   kv_engine_config_t config;
