@@ -1,0 +1,164 @@
+# Multi-SSD Full Benchmark Suite via SPDK bdev
+#
+# Runs sequential and random workloads across 4 simulated SSDs.
+# Each test phase runs with stonewall (sequential phases).
+#
+# Usage:
+#   LD_PRELOAD=/user/lib/spdk/build/fio/spdk_bdev fio /user/benchmarks/fio/multi_ssd_full_bench.fio
+
+[global]
+ioengine=spdk_bdev
+spdk_json_conf=/user/benchmarks/fio/bdev_multi_ssd.json
+thread=1
+direct=1
+group_reporting=1
+norandommap=1
+time_based=1
+percentile_list=50:99:99.9:99.99
+
+# ── Sequential Write (precondition) ──────────────────────────────
+
+[seq_write_precondition]
+stonewall
+description=Sequential write precondition across all SSDs
+filename=Malloc0:Malloc1:Malloc2:Malloc3
+bs=128k
+rw=write
+iodepth=32
+runtime=15
+ramp_time=0
+numjobs=1
+
+# ── 4K Random Write ──────────────────────────────────────────────
+
+[4k_randwrite_ssd0]
+stonewall
+description=4K random write - SSD 0
+filename=Malloc0
+bs=4k
+rw=randwrite
+iodepth=128
+runtime=30
+ramp_time=5
+
+[4k_randwrite_ssd1]
+description=4K random write - SSD 1
+filename=Malloc1
+bs=4k
+rw=randwrite
+iodepth=128
+runtime=30
+ramp_time=5
+
+[4k_randwrite_ssd2]
+description=4K random write - SSD 2
+filename=Malloc2
+bs=4k
+rw=randwrite
+iodepth=128
+runtime=30
+ramp_time=5
+
+[4k_randwrite_ssd3]
+description=4K random write - SSD 3
+filename=Malloc3
+bs=4k
+rw=randwrite
+iodepth=128
+runtime=30
+ramp_time=5
+
+# ── 4K Random Read ───────────────────────────────────────────────
+
+[4k_randread_ssd0]
+stonewall
+description=4K random read - SSD 0
+filename=Malloc0
+bs=4k
+rw=randread
+iodepth=128
+runtime=30
+ramp_time=5
+
+[4k_randread_ssd1]
+description=4K random read - SSD 1
+filename=Malloc1
+bs=4k
+rw=randread
+iodepth=128
+runtime=30
+ramp_time=5
+
+[4k_randread_ssd2]
+description=4K random read - SSD 2
+filename=Malloc2
+bs=4k
+rw=randread
+iodepth=128
+runtime=30
+ramp_time=5
+
+[4k_randread_ssd3]
+description=4K random read - SSD 3
+filename=Malloc3
+bs=4k
+rw=randread
+iodepth=128
+runtime=30
+ramp_time=5
+
+# ── 4K Mixed Read/Write (70/30) ─────────────────────────────────
+
+[4k_randrw_ssd0]
+stonewall
+description=4K mixed 70/30 read/write - SSD 0
+filename=Malloc0
+bs=4k
+rw=randrw
+rwmixread=70
+iodepth=128
+runtime=30
+ramp_time=5
+
+[4k_randrw_ssd1]
+description=4K mixed 70/30 read/write - SSD 1
+filename=Malloc1
+bs=4k
+rw=randrw
+rwmixread=70
+iodepth=128
+runtime=30
+ramp_time=5
+
+[4k_randrw_ssd2]
+description=4K mixed 70/30 read/write - SSD 2
+filename=Malloc2
+bs=4k
+rw=randrw
+rwmixread=70
+iodepth=128
+runtime=30
+ramp_time=5
+
+[4k_randrw_ssd3]
+description=4K mixed 70/30 read/write - SSD 3
+filename=Malloc3
+bs=4k
+rw=randrw
+rwmixread=70
+iodepth=128
+runtime=30
+ramp_time=5
+
+# ── Sequential Read ──────────────────────────────────────────────
+
+[seq_read_all]
+stonewall
+description=Sequential read across all SSDs
+filename=Malloc0:Malloc1:Malloc2:Malloc3
+bs=128k
+rw=read
+iodepth=32
+runtime=15
+ramp_time=5
+numjobs=1

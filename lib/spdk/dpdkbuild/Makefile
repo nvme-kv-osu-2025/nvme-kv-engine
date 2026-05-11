@@ -27,7 +27,7 @@ DPDK_KMODS = false
 ifeq ($(OS),FreeBSD)
 DPDK_KMODS = true
 endif
-DPDK_OPTS += -Denable_kmods=$(DPDK_KMODS)
+# DPDK_OPTS += -Denable_kmods=$(DPDK_KMODS)  # removed in newer DPDK
 
 ifeq ($(CONFIG_DEBUG),y)
 DPDK_OPTS += --buildtype=debug
@@ -124,7 +124,7 @@ DPDK_LIBS += cryptodev mbuf cmdline meter hash vhost dmadev
 # raid5 deps
 DPDK_LIBS += hash rcu
 
-DPDK_OPTS += -Dcpu_instruction_set=$(TARGET_ARCHITECTURE)
+# DPDK_OPTS += -Dcpu_instruction_set=$(TARGET_ARCHITECTURE)  # removed in newer DPDK
 
 ifneq ($(CONFIG_CROSS_PREFIX),)
 ifeq ($(findstring mingw,$(CONFIG_CROSS_PREFIX)),mingw)

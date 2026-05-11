@@ -1,0 +1,40 @@
+# Multi-SSD FIO Benchmark (file-based, no SPDK plugin required)
+#
+# Simulates 4 SSDs using separate files. Each job targets a different
+# file to model independent SSD workloads.
+#
+# Usage (inside Docker container):
+#   apt-get install -y fio
+#   fio /user/benchmarks/fio/multi_ssd_fileio.fio
+
+[global]
+ioengine=posixaio
+direct=1
+group_reporting=0
+norandommap=1
+time_based=1
+runtime=30
+ramp_time=5
+bs=4k
+rw=randrw
+rwmixread=70
+iodepth=128
+size=256m
+directory=/tmp/fio_bench
+percentile_list=50:99:99.9:99.99
+
+[ssd0]
+filename=ssd0.dat
+numjobs=1
+
+[ssd1]
+filename=ssd1.dat
+numjobs=1
+
+[ssd2]
+filename=ssd2.dat
+numjobs=1
+
+[ssd3]
+filename=ssd3.dat
+numjobs=1

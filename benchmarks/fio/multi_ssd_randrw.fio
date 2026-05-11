@@ -1,0 +1,39 @@
+# Multi-SSD Random Read/Write Benchmark via SPDK bdev
+#
+# Simulates 4 NVMe SSDs using SPDK malloc bdevs.
+# Each [job] targets a separate device, running concurrently.
+#
+# Usage:
+#   LD_PRELOAD=/user/lib/spdk/build/fio/spdk_bdev fio /user/benchmarks/fio/multi_ssd_randrw.fio
+
+[global]
+ioengine=spdk_bdev
+spdk_json_conf=/user/benchmarks/fio/bdev_multi_ssd.json
+thread=1
+direct=1
+group_reporting=0
+norandommap=1
+time_based=1
+runtime=30
+ramp_time=5
+bs=4k
+rw=randrw
+rwmixread=70
+iodepth=128
+percentile_list=50:99:99.9:99.99
+
+[ssd0]
+filename=Malloc0
+numjobs=1
+
+[ssd1]
+filename=Malloc1
+numjobs=1
+
+[ssd2]
+filename=Malloc2
+numjobs=1
+
+[ssd3]
+filename=Malloc3
+numjobs=1
